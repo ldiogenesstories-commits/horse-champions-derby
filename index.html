@@ -10,7 +10,29 @@
 <div id="app">
 
   <!-- ============ STABLE ============ -->
-  <section id="stable" class="screen active" aria-label="Stable">
+  <section id="ranch" class="screen" aria-label="Ranch">
+    <div class="rn-stage" id="rn-stage">
+      <div class="rn-hud">
+        <div class="rn-id"><b id="rn-name">Gale Runner</b><span id="rn-day">Day 1</span></div>
+        <div class="rn-meters">
+          <div class="act-pips" id="rn-actions"></div>
+          <div class="rn-fat" title="Fatigue"><i id="rn-fatigue"></i></div>
+        </div>
+      </div>
+      <div class="rn-btns">
+        <button class="rn-btn" id="rn-barn">☰ Barn</button>
+        <button class="rn-btn go" id="rn-race">🏁 Race</button>
+      </div>
+      <div class="rn-toast" id="rn-toast" hidden></div>
+      <button class="rn-use" id="rn-use" hidden><b></b><span></span></button>
+      <div class="rn-stick" id="rn-stick"><i></i></div>
+      <button class="rn-mode" id="rn-mode" aria-label="Switch steering">👆 Tap to go</button>
+      <div class="rn-gait" id="rn-gait"></div>
+    </div>
+  </section>
+
+  <section id="stable" class="screen" aria-label="Stable">
+    <button class="ghost small back" id="st-to-ranch">← Out to the ranch</button>
     <header class="st-head">
       <div>
         <div class="eyebrow">Horse Champions Derby</div>

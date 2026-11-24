@@ -71,7 +71,7 @@ function tail(style: TailStyle, hair: string, shade: string): string {
     <path d="M94 158 C92 166 88 170 84 172 C90 172 96 168 98 160" fill="${hair}"/>`;
 }
 
-export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string; pose?: number } = {}): string {
+export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string; pose?: number; graze?: boolean } = {}): string {
   const c = COATS[def.coat ?? 'bay'];
   const hair = c.mane;
   const shade = c.shade;
@@ -103,8 +103,10 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
   const forelock = look.forelock === 'loose'
     ? `<path d="M292 30 L300 30 L308 48 L302 52 L298 42 L294 50 Z" fill="${hair}"/>`
     : [[296, 33], [299, 40], [302, 47]].map(([x, y], i) => `<ellipse cx="${x}" cy="${y}" rx="4" ry="5" fill="${i % 2 ? shade : hair}" stroke="#2B2118" stroke-width="1"/>`).join('');
-  const bows = (look.bow === 'mane' || look.bow === 'both' ? bow(286, 40, bowC, 0.9) : '')
-    + (look.bow === 'tail' || look.bow === 'both' ? bow(look.tail === 'bun' ? 98 : 98, look.tail === 'bun' ? 128 : 126, bowC, 0.9) : '');
+  const maneBow = look.bow === 'mane' || look.bow === 'both' ? bow(286, 40, bowC, 0.9) : '';
+  const tailBow = look.bow === 'tail' || look.bow === 'both' ? bow(98, look.tail === 'bun' ? 128 : 126, bowC, 0.9) : '';
+  // Grazing: the neck and head swing down to the grass.
+  const headT = opts.graze ? 'translate(4 66) rotate(84 252 120)' : '';
   const shine = opts.shine ? `<path d="M120 116 C150 106 190 108 214 112" stroke="#FFFBF2" stroke-width="5" fill="none" opacity="0.45" stroke-linecap="round"/>
     <path d="M250 112 C262 96 272 80 280 64" stroke="#FFFBF2" stroke-width="3" fill="none" opacity="0.35" stroke-linecap="round"/>
     <path d="M134 164 C160 172 200 172 232 166" stroke="#FFFBF2" stroke-width="3" fill="none" opacity="0.25" stroke-linecap="round"/>` : '';
@@ -118,23 +120,26 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
     ${look.tail === 'bun' ? '' : tail(look.tail, hair, shade)}
     <!-- body, neck, head -->
     <path d="M92 132 C92 106 130 98 170 104 C205 108 226 104 240 102 L284 128 C292 160 280 182 252 186 L132 188 C106 188 90 166 92 132 Z" fill="${c.body}"/>
+    <g transform="${headT}">
     <path d="M236 104 L282 42 L300 32 L336 72 L340 84 L332 94 L316 94 L298 82 L294 130 L284 136 Z" fill="${c.body}"/>
     <polygon points="290,36 292,12 302,30" fill="${c.body}"/><polygon points="292,30 293,18 298,30" fill="${shade}"/>
+    </g>
     <path d="M132 188 C150 192 220 192 252 186 L250 180 C220 184 160 184 132 182 Z" fill="${shade}"/>
-    ${face}
+    <g transform="${headT}">${face}
     <circle cx="306" cy="52" r="3" fill="#141110"/><circle cx="307" cy="51" r="1" fill="#FFFBF2"/>
-    <ellipse cx="333" cy="82" rx="2" ry="1.5" fill="#141110"/>
+    <ellipse cx="333" cy="82" rx="2" ry="1.5" fill="#141110"/></g>
     <!-- near legs -->
     ${leg(0)}${leg(2)}
     ${look.tail === 'bun' ? tail('bun', hair, shade) : ''}
     ${pad}
-    ${mane(look.mane, hair, shade)}
+    <g transform="${headT}">${mane(look.mane, hair, shade)}
     ${forelock}
     ${crown}
     <g stroke="#FFFBF2" stroke-width="4" fill="none" stroke-linecap="round"><path d="M298 40 L314 88"/><path d="M324 66 L318 92"/></g>
     <g stroke="${silk}" stroke-width="2.6" fill="none" stroke-linecap="round"><path d="M298 40 L314 88"/><path d="M324 66 L318 92"/></g>
+    ${maneBow}</g>
     ${opts.rider ?? ''}
-    ${bows}
+    ${tailBow}
     ${shine}
   </g>
   ${dust}

@@ -31,6 +31,7 @@ import { CRITTER_SVG, FRIENDS, rosetteSVG, webSVG, type FriendId } from './game/
 import { DEFAULT_JOCKEY, silksBadge, type Jockey } from './game/jockey';
 import { runJockeyRoom } from './training/jockeyRoom';
 import { Broadcast } from './game/broadcast';
+import { Ranch, type Station } from './game/ranch';
 import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup } from './net/cloud';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
@@ -107,10 +108,15 @@ const START_LABEL: Record<StartPlan, string> = { fast: 'Fast Break', steady: 'St
 const TRACK_LABEL: Record<TrackPlan, string> = { lead: 'Push for Lead', stalk: 'Chase the Leaders', mid: 'Mid-Pack Cruise', lag: 'Lag Back' };
 const CLOSE_LABEL: Record<ClosePlan, string> = { early: 'Early Move', late: 'Late Kick', protect: 'Protect the Lead', dig: 'Dig In' };
 
-type Screen = 'family' | 'breed' | 'stable' | 'drill' | 'groom' | 'jockey' | 'pre' | 'race' | 'results' | 'retire' | 'hall';
+type Screen = 'ranch' | 'family' | 'breed' | 'stable' | 'drill' | 'groom' | 'jockey' | 'pre' | 'race' | 'results' | 'retire' | 'hall';
+// "Home" is the ranch; the barn (the stable menu) is home only after you walk in.
+let home: 'ranch' | 'stable' = 'ranch';
+let forceBarn = false;
 function show(id: Screen): void {
-  if (id === 'stable') renderStable();
-  for (const s of ['family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall']) $(s).classList.toggle('active', s === id);
+  if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
+  if (id === 'stable' || id === 'ranch') renderStable();
+  for (const s of ['ranch', 'family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall']) $(s).classList.toggle('active', s === id);
+  if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
 }
 
@@ -947,9 +953,14 @@ function stableMsg(text: string, warn = false): void {
   const m = $('st-msg');
   m.textContent = text;
   m.classList.toggle('warn', warn);
+  if ($('ranch').classList.contains('active')) ranchToast(text, warn);
 }
 
 function renderStable(): void {
+  if (portalActions >= 0 && actionsLeft < portalActions && home === 'ranch') {
+    portalActions = -1;
+    setTimeout(() => { if ($('stable').classList.contains('active')) show('ranch'); }, 900);
+  }
   checkFriends();
   $('st-title').textContent = `${player.name}'s stable`;
   $('st-about-name').textContent = player.name;
@@ -1517,6 +1528,119 @@ $('restore-go').addEventListener('click', async () => {
 });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void backupNow(); });
 
+// ---------- The Ranch ----------
+let ranch: Ranch | null = null;
+let nearStation: Station | null = null;
+let toastTimer = 0;
+let toasted = '';
+let portalActions = -1; // set while a portal opened a barn panel (feed)
+const GAIT_LABEL: Record<string, string> = { stand: '', walk: 'WALK', trot: 'TROT', canter: 'CANTER' };
+
+function ranchToast(text: string, warn = false): void {
+  if (!text) return;
+  toasted = text;
+  const t = $('rn-toast');
+  t.textContent = text;
+  t.classList.toggle('warn', warn);
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => { t.hidden = true; }, Math.max(2600, text.length * 55));
+}
+
+function renderRanchHud(): void {
+  $('rn-name').textContent = player.name;
+  const ev = eventToday();
+  $('rn-day').textContent = `Day ${day}${ev ? ` · ${ev.name} today!` : ''}`;
+  $('rn-actions').innerHTML = Array.from({ length: ACTIONS_PER_DAY }, (_, i) => `<i class="${i < actionsLeft ? 'on' : ''}"></i>`).join('');
+  ($('rn-fatigue') as HTMLElement).style.width = `${Math.round(fatigue)}%`;
+}
+
+function enterRanch(): void {
+  if (!ranch) {
+    ranch = new Ranch($('rn-stage'), {
+      onNear: (st) => {
+        nearStation = st;
+        const b = $('rn-use');
+        b.hidden = !st;
+        if (st) { b.querySelector('b')!.textContent = st.label; b.querySelector('span')!.textContent = st.hint; }
+      },
+      onGait: (g) => { $('rn-gait').textContent = GAIT_LABEL[g]; },
+    });
+    setSteering(localStorage.getItem('hcd-ranch-tap') === '1');
+  }
+  portalActions = -1;
+  renderRanchHud();
+  void ranch.setHorse(player, look);
+  ranch.start();
+  const msg = $('st-msg').textContent ?? '';
+  if (msg && msg !== toasted) ranchToast(msg, $('st-msg').classList.contains('warn'));
+}
+
+function setSteering(tap: boolean): void {
+  if (!ranch) return;
+  ranch.tapMode = tap;
+  ranch.setStick(0, 0);
+  $('rn-stage').classList.toggle('tap', tap);
+  $('rn-stick').hidden = tap;
+  $('rn-mode').textContent = tap ? '🕹 Use stick' : '👆 Tap to go';
+  try { localStorage.setItem('hcd-ranch-tap', tap ? '1' : '0'); } catch { /* ignore */ }
+}
+
+function openBarn(): void {
+  home = 'stable';
+  show('stable');
+}
+
+/** Walking up to a station opens its part of the game. */
+function usePortal(id: Station['id']): void {
+  if (id === 'barn') { openBarn(); return; }
+  if (id === 'shade') {
+    const before = actionsLeft;
+    rest();
+    renderRanchHud();
+    if (actionsLeft < before) ranch?.place(1240, 330, 'right');
+    return;
+  }
+  // Feed and training use the barn's panels; you come back out to the ranch afterwards.
+  if (!needAction()) return;
+  forceBarn = true;
+  show('stable');
+  forceBarn = false;
+  if (id === 'feed') { portalActions = actionsLeft; openFeed(); }
+  else openTraining();
+  setTimeout(() => (id === 'feed' ? $('feed-panel') : $('train-panel')).scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+}
+
+$('rn-use').addEventListener('click', () => { if (nearStation) usePortal(nearStation.id); });
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && $('ranch').classList.contains('active') && nearStation) { e.preventDefault(); usePortal(nearStation.id); }
+});
+$('rn-barn').addEventListener('click', openBarn);
+$('rn-race').addEventListener('click', () => $('go-race').click());
+$('st-to-ranch').addEventListener('click', () => { home = 'ranch'; show('ranch'); });
+$('rn-mode').addEventListener('click', () => setSteering(!ranch?.tapMode));
+{
+  // Thumb stick.
+  const stick = $('rn-stick');
+  const knob = stick.querySelector('i') as HTMLElement;
+  let id: number | null = null;
+  const move = (e: PointerEvent) => {
+    const r = stick.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    const max = r.width / 2 - 8;
+    const d = Math.hypot(dx, dy);
+    if (d > max) { dx = (dx / d) * max; dy = (dy / d) * max; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    ranch?.setStick(dx / max, dy / max);
+  };
+  stick.addEventListener('pointerdown', (e) => { id = e.pointerId; stick.setPointerCapture(e.pointerId); move(e); });
+  stick.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
+  const end = (e: PointerEvent) => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; ranch?.setStick(0, 0); };
+  stick.addEventListener('pointerup', end);
+  stick.addEventListener('pointercancel', end);
+}
+
 load();
 player.look = look;
 // Welcome a shining-star foal the first time we see it.
@@ -1539,6 +1663,6 @@ else show('stable');
   const rest = q.get('restore');
   if (card || rest) history.replaceState(null, '', location.pathname + (q.has('local') ? '?local' : ''));
   if (card) { renderHall(); ($('card-code') as HTMLInputElement).value = card; void findCard(card); }
-  else if (rest) { show('stable'); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
+  else if (rest) { openBarn(); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
 }
 setTimeout(() => { void backupNow(); void shareCards(); }, 2500);

@@ -20,10 +20,10 @@ function leg(x: number, lift: number, coat: string, hoof: string, wrap: string |
     <ellipse cx="${kx}" cy="${foot + 2}" rx="${w / 2 + 1}" ry="${5 + lift * 2}" fill="${hoof}" stroke="${INK}" stroke-width="2"/>`;
 }
 
-export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey, pose: number): string {
+export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey | null, pose: number): string {
   const c = COATS[def.coat ?? 'bay'];
   const silk = def.color;
-  const s = silksDefs(j);
+  const s = j ? silksDefs(j) : { defs: '', fill: '' };
   const ph = Math.sin(2 * Math.PI * pose);
   const lA = Math.max(0, ph);
   const lB = Math.max(0, -ph);
@@ -45,7 +45,7 @@ export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey, pose: number
     : look.mane === 'buttons' || look.mane === 'running'
       ? [0, 1, 2, 3].map((i) => `<circle cx="${74 - i}" cy="${100 + i * 11}" r="5" fill="${c.mane}" stroke="${INK}" stroke-width="1.2"/>`).join('')
       : `<path d="M80 90 L64 104 L72 108 L60 126 L70 128 L62 146 L80 140 Z" fill="${c.mane}"/>`;
-  const sleeve = j.pattern === 'solid' ? j.primary : j.secondary;
+  const sleeve = j ? (j.pattern === 'solid' ? j.primary : j.secondary) : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 270">
   ${s.defs ? `<defs>${s.defs}</defs>` : ''}
   <ellipse cx="100" cy="258" rx="58" ry="9" fill="rgba(43,33,24,.22)"/>
@@ -58,7 +58,7 @@ export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey, pose: number
     <ellipse cx="100" cy="148" rx="54" ry="44" fill="${c.body}" stroke="${INK}" stroke-width="2.5"/>
     <ellipse cx="62" cy="150" rx="14" ry="34" fill="${c.shade}"/><ellipse cx="138" cy="150" rx="14" ry="34" fill="${c.shade}"/>
     ${look.pad ? `<path d="M52 124 Q100 110 148 124 L144 112 Q100 100 56 112 Z" fill="${silk}" stroke="${INK}" stroke-width="1.5"/>` : ''}
-    <!-- rider crouched up behind the head: shoulders in silks, arms down to the reins -->
+    ${j ? `    <!-- rider crouched up behind the head: shoulders in silks, arms down to the reins -->
     <path d="M58 66 Q100 36 142 66 L134 90 Q100 76 66 90 Z" fill="${s.fill}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M68 74 L74 116" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><path d="M68 74 L74 116" stroke="${sleeve}" stroke-width="7" stroke-linecap="round"/>
     <path d="M132 74 L126 116" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><path d="M132 74 L126 116" stroke="${sleeve}" stroke-width="7" stroke-linecap="round"/>
@@ -67,6 +67,7 @@ export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey, pose: number
     <circle cx="100" cy="16" r="2.4" fill="${j.cap === j.primary ? j.secondary : j.primary}" stroke="${INK}" stroke-width="1"/>
     <circle cx="96" cy="35" r="1.4" fill="${INK}"/><circle cx="104" cy="35" r="1.4" fill="${INK}"/>
     <path d="M96 39 q4 2.5 8 0" stroke="${INK}" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+` : ''}
     <!-- mane down the near side of the neck -->
     ${maneSide}
     <!-- neck -->
