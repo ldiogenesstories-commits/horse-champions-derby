@@ -1,4 +1,4 @@
-// Career arc: a horse races 20 times, then retires with a ceremony, a rank,
+// Career arc: a horse races 25 times, then retires with a ceremony, a rank,
 // badges, and a collectible virtual card (unique code + QR) for the Hall of Fame.
 import qrcode from 'qrcode-generator';
 import type { HorseDef } from '../sim/types';
@@ -6,7 +6,7 @@ import { horseBodySVG, type Look } from '../game/horseBody';
 import { riderSVG, silksBadge, type Jockey } from '../game/jockey';
 import { cardUrl } from '../net/cloud';
 
-export const CAREER_RACES = 20;
+export const CAREER_RACES = 25;
 
 export interface CareerLog {
   eventWins: string[];
@@ -40,10 +40,10 @@ export function careerPoints(rec: { w: number; p: number; s: number }, log: Care
 }
 
 export function rankFor(points: number): string {
-  if (points >= 150) return 'Legend';
-  if (points >= 100) return 'Champion';
-  if (points >= 60) return 'Star';
-  if (points >= 25) return 'Contender';
+  if (points >= 190) return 'Legend';
+  if (points >= 125) return 'Champion';
+  if (points >= 75) return 'Star';
+  if (points >= 30) return 'Contender';
   return 'Fan Favourite';
 }
 

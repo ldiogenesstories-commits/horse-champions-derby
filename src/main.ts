@@ -123,7 +123,7 @@ function renderPaddock(): void {
   $('pc-style').textContent = STYLE_LABEL[player.style];
   $('pc-dist').textContent = DIST_INFO[(player.distancePref ?? 'mile') as DistanceKey].label;
   renderDistance();
-  $('pc-record').textContent = raceCount ? `${raceCount} of 20 races · ${record.w}-${record.p}-${record.s}` : 'Maiden · 0 of 20 races';
+  $('pc-record').textContent = raceCount ? `${raceCount} of ${CAREER_RACES} races · ${record.w}-${record.p}-${record.s}` : `Maiden · 0 of ${CAREER_RACES} races`;
   const stats: [string, number][] = [
     ['Speed', player.stats.speed], ['Stamina', player.stats.stamina], ['Acceleration', player.stats.accel],
     ['Guts', player.stats.guts], ['Gate Skill', player.stats.gate], ['Agility', player.stats.agility],
@@ -777,7 +777,7 @@ function renderHall(): void {
   $('hall-breed').hidden = !hall.length;
   $('hall-grid').innerHTML = hall.length
     ? hall.map((c) => cardHTML(c)).join('')
-    : '<p class="muted">No retired horses yet. Finish a 20-race career, or add a card from family and friends.</p>';
+    : `<p class="muted">No retired horses yet. Finish a ${CAREER_RACES}-race career, or add a card from family and friends.</p>`;
   show('hall');
 }
 

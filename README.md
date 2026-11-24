@@ -23,6 +23,6 @@ directly, no server needed.
 - `src/sim/` race engine (seeded, fixed-step), field and foal generation, growth rules (bands, hidden peaks, tiers)
 - `src/game/` Phaser race scene, portraits, full-body horse, jockey, barn critters, names
 - `src/training/` the six drills, grooming kit, jockey room, grades
-- `src/career/` 20-race career, retirement cards + QR, breeding
+- `src/career/` 25-race career, retirement cards + QR, breeding
 - `src/net/` family-play rooms (Supabase Realtime or local tabs) and the lobby
 - `src/main.ts` stable hub, race office, results and the glue
