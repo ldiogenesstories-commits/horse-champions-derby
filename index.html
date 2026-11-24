@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Horse Champions Derby — Race Prototype</title>
+
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ STABLE ============ -->
+  <section id="stable" class="screen active" aria-label="Stable">
+    <header class="st-head">
+      <div>
+        <div class="eyebrow">Horse Champions Derby</div>
+        <h1 id="st-title">Gale Runner's stable</h1>
+      </div>
+      <div class="st-day" id="st-day">Day 1</div>
+    </header>
+
+    <div class="st-scene" id="st-scene">
+      <svg viewBox="0 0 400 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true" class="st-bg">
+        <rect width="400" height="230" fill="#C99B6B"/>
+        <g fill="#B98B5E">
+          <rect x="0" y="0" width="400" height="18"/><rect x="0" y="40" width="400" height="18"/><rect x="0" y="80" width="400" height="18"/><rect x="0" y="120" width="400" height="18"/>
+        </g>
+        <rect x="0" y="176" width="400" height="54" fill="#8A6A45"/>
+        <g fill="#E2C46A" stroke="#B8962F" stroke-width="2">
+          <rect x="14" y="150" width="70" height="34" rx="6"/><rect x="34" y="124" width="60" height="30" rx="6"/>
+          <rect x="316" y="152" width="74" height="32" rx="6"/>
+        </g>
+        <g stroke="#6B4A2B" stroke-width="3" fill="none"><path d="M24 160h50M44 134h40M326 162h54"/></g>
+        <!-- stall doors behind the aisle -->
+        <g fill="#7A5634" stroke="#5A3F28" stroke-width="3"><rect x="104" y="44" width="86" height="132" rx="4"/><rect x="210" y="44" width="86" height="132" rx="4"/></g>
+        <g stroke="#5A3F28" stroke-width="5"><path d="M110 120 L184 170 M184 120 L110 170 M216 120 L290 170 M290 120 L216 170"/></g>
+        <g fill="#3A2A1B"><rect x="112" y="52" width="70" height="56" rx="3"/><rect x="218" y="52" width="70" height="56" rx="3"/></g>
+        <line x1="200" y1="0" x2="200" y2="14" stroke="#2B2118" stroke-width="2"/>
+        <circle cx="330" cy="40" r="12" fill="#FFD23F" stroke="#2B2118" stroke-width="3"/>
+        <line x1="330" y1="0" x2="330" y2="28" stroke="#2B2118" stroke-width="2"/>
+      </svg>
+      <div class="st-web" id="st-web" hidden></div>
+      <button class="st-nameplate" id="st-nameplate" aria-label="Rename your horse">GALE RUNNER</button>
+      <div class="st-horse" id="st-horse"></div>
+      <div class="st-friends" id="st-friends"></div>
+      <div class="st-mood" id="st-mood">Perky and ready</div>
+    </div>
+    <div class="st-rosettes" id="st-rosettes" hidden></div>
+
+    <div class="st-status">
+      <div class="g-row fatigue-row"><span id="st-fatigue-num">Fresh</span><div class="bar fatigue"><i id="st-fatigue"></i></div><span class="num">Fatigue</span></div>
+    </div>
+    <div class="g-row actions-row"><span>Actions</span><div class="act-pips" id="st-actions"></div><span class="num" id="st-actions-num">3 left</span></div>
+    <div class="st-msg" id="st-msg" aria-live="polite"></div>
+
+    <div class="stations">
+      <button class="station" id="go-train"><b>Training board</b><span>Mini-games build stats</span></button>
+      <button class="station" id="go-rest"><b>Rest</b><span>Fatigue −50</span></button>
+      <button class="station" id="go-treats"><b>Treat bag</b><span id="treat-count">Empty</span></button>
+      <button class="station" id="go-feed"><b>Feed bin</b><span id="feed-status">Breakfast time</span></button>
+      <button class="station" id="go-groom"><b>Grooming kit</b><span id="groom-status">Brush · braid · dress up</span></button>
+      <button class="station" id="go-jockey"><b>Jockey room</b><span id="jockey-status">Silks · cap · rider</span></button>
+      <button class="station primary" id="go-race"><b>Race office</b><span>Pick a race</span></button>
+    </div>
+
+    <div class="panel" id="train-panel" hidden>
+      <div class="panel-head"><b>Training board</b><button class="ghost small" id="train-close">Close</button></div>
+      <ul class="drills" id="drill-list"></ul>
+    </div>
+    <div class="panel" id="rename-panel" hidden>
+      <div class="panel-head"><b>Name your horse</b><button class="ghost small" id="rename-close">Close</button></div>
+      <p class="panel-note" id="rename-note"></p>
+      <div class="rename-row"><input id="rename-input" maxlength="18" autocomplete="off" spellcheck="false" aria-label="Horse name"><button class="big go" id="rename-save">Save</button></div>
+    </div>
+    <div class="panel" id="feed-panel" hidden>
+      <div class="panel-head"><b>Feed bin</b><button class="ghost small" id="feed-close">Close</button></div>
+      <p class="panel-note" id="feed-note"></p>
+      <ul class="drills" id="feed-list"></ul>
+    </div>
+    <div class="panel" id="treat-panel" hidden>
+      <div class="panel-head"><b>Treat bag</b><button class="ghost small" id="treat-close">Close</button></div>
+      <ul class="drills" id="treat-list"></ul>
+    </div>
+
+    <details class="card horse-details">
+      <summary>About <span id="st-about-name">Gale Runner</span></summary>
+      <div id="horse-card">
+        <div class="card-head">
+          <div class="portrait" id="pc-silk"></div>
+          <div>
+            <div class="h-name" id="pc-name">Gale Runner</div>
+            <div class="h-meta" id="pc-meta">Proud · Pace Chaser</div>
+          </div>
+          <div class="record" id="pc-record">0 races</div>
+        </div>
+        <div class="sec-t">Ability</div>
+        <div class="stats" id="pc-stats"></div>
+        <div class="sec-t">Character</div>
+        <div class="persona">
+          <div class="p-row"><span class="p-k">Running style</span><span class="p-v" id="pc-style">Pace Chaser</span></div>
+          <div class="p-row"><span class="p-k">Best distance</span><span class="p-v" id="pc-dist">Mile</span></div>
+          <div class="p-row"><span class="p-k">Temperament</span><span class="p-v" id="pc-temp">Proud</span></div>
+          <div class="p-sub" id="pc-temp-blurb"></div>
+          <div class="p-row"><span class="p-k">Need</span><span class="p-v" id="pc-need">???</span></div>
+          <div class="p-sub" id="pc-need-blurb"></div>
+        </div>
+        <div class="sec-t">Bond</div>
+        <div class="growth">
+          <div class="g-row"><span>Confidence</span><div class="bar capbar"><i id="pc-conf"></i><b class="cap" id="pc-cap"></b></div><span class="num" id="pc-conf-num">55 / 70</span></div>
+          <div class="g-row"><span>Trust</span><div class="bar trust"><i id="pc-trust"></i><s style="left:25%"></s><s style="left:50%"></s><s style="left:75%"></s></div><span class="num" id="pc-trust-num">10</span></div>
+          <div class="buff" id="pc-buff" hidden></div>
+          <div class="g-note" id="pc-growth-note"></div>
+        </div>
+      </div>
+
+    </details>
+    <details class="card friends-album" id="friends-album">
+      <summary>Barn friends <span id="friends-count">0 of 6</span></summary>
+      <ul class="album" id="album-list"></ul>
+    </details>
+    <button class="station hall-btn" id="go-hall" hidden><b>Hall of Fame</b><span id="hall-count"></span></button>
+    <button class="ghost small start-over" id="start-over">Start over (reset this horse)</button>
+  </section>
+
+  <!-- ============ DRILL ============ -->
+  <section id="retire" class="screen" aria-label="Retirement">
+    <div class="ret-confetti" aria-hidden="true"></div>
+    <div class="eyebrow">Retirement ceremony</div>
+    <h1 id="ret-title">A champion retires</h1>
+    <p class="sub" id="ret-sub"></p>
+    <div id="ret-card"></div>
+    <div class="ret-actions">
+      <button class="big ghost" id="ret-print">Print card</button>
+      <button class="big go" id="ret-breed">Breed a foal</button>
+    </div>
+    <div class="ret-actions">
+      <button class="big ghost" id="ret-new">Random new horse</button>
+    </div>
+    <div class="card ret-name" id="ret-name-box" hidden>
+      <div class="card-title">Name your new horse</div>
+      <div class="rename-row"><input id="ret-name-input" maxlength="18" autocomplete="off" spellcheck="false" aria-label="New horse name"><button class="big go" id="ret-name-go">Start career</button></div>
+    </div>
+    <p class="muted ret-note">Your card is saved in the Hall of Fame on this device. The QR holds the card's code and stats so it can be scanned back in later.</p>
+  </section>
+
+  <section id="family" class="screen" aria-label="Family race"><div id="family-root"></div></section>
+
+  <section id="breed" class="screen" aria-label="Breeding barn"><div id="breed-root"></div></section>
+
+  <section id="hall" class="screen" aria-label="Hall of Fame">
+    <button class="ghost small back" id="hall-back">← Back to stable</button>
+    <div class="eyebrow">Your stable's legends</div>
+    <h1>Hall of Fame</h1>
+    <button class="big go hall-breed" id="hall-breed">Breed a foal</button>
+    <div class="hall-grid" id="hall-grid"></div>
+  </section>
+
+  <section id="jockey" class="screen" aria-label="Jockey room"><div id="jockey-root"></div></section>
+
+  <section id="groom" class="screen" aria-label="Grooming"><div id="groom-root"></div></section>
+
+  <section id="drill" class="screen" aria-label="Training">
+    <div id="drill-root"></div>
+    <div class="drill-result" id="drill-result" hidden>
+      <div class="dr-grade" id="dr-grade">A</div>
+      <div class="dr-pct" id="dr-pct">92%</div>
+      <ul class="growth-log" id="dr-log"></ul>
+      <button class="big go" id="dr-done">Back to stable</button>
+    </div>
+  </section>
+
+  <!-- ============ PRE-RACE ============ -->
+  <section id="pre" class="screen" aria-label="Race office">
+    <header class="pre-head">
+      <button class="ghost small back" id="pre-back">← Back to stable</button>
+      <div class="eyebrow">Race office</div>
+      <h1>Pick a race</h1>
+      <p class="sub" id="pre-sub">Choose a distance and your race plan, then load the gate.</p>
+    </header>
+
+    <button class="station family-btn" id="go-family"><b>👨‍👩‍👧 Race with family</b><span>Everyone races from their own phone</span></button>
+    <div class="pre-grid">
+      <div class="card event-card" id="event-card" hidden>
+        <div class="card-title" id="event-title">Special event</div>
+        <p class="muted" id="event-blurb"></p>
+        <button class="big ghost" id="event-enter">Enter the event</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Race distance</div>
+        <div class="dist-pick" role="radiogroup" aria-label="Race distance" id="dist-pick"></div>
+        <div class="fit" id="dist-fit"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Race plan</div>
+        <label class="field"><span>Starting gun</span>
+          <select id="plan-start">
+            <option value="fast">Fast Break</option>
+            <option value="steady" selected>Steady Break</option>
+            <option value="settle">Settle Back</option>
+          </select></label>
+        <label class="field"><span>Track strategy</span>
+          <select id="plan-track">
+            <option value="lead">Push for Lead</option>
+            <option value="stalk" selected>Chase the Leaders</option>
+            <option value="mid">Mid-Pack Cruise</option>
+            <option value="lag">Lag Back / Reserve</option>
+          </select></label>
+        <label class="field"><span>Closing</span>
+          <select id="plan-close">
+            <option value="early" selected>Early Move</option>
+            <option value="late">Late Kick</option>
+            <option value="protect">Protect the Lead</option>
+            <option value="dig">Dig In</option>
+          </select></label>
+        <label class="field"><span>Lane</span>
+          <select id="plan-lane">
+            <option value="rail" selected>Hug the Rail</option>
+            <option value="wide">Run Wide</option>
+          </select></label>
+        <div class="fit" id="plan-fit"></div>
+        <div class="field"><span>Who's riding?</span>
+          <div class="seg" role="group" aria-label="Who's riding">
+            <button id="ride-you" class="on" aria-pressed="true">You</button>
+            <button id="ride-auto" aria-pressed="false">Auto jockey</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Today's field <span class="muted" id="field-name"></span></div>
+        <ol class="field-list" id="field-list"></ol>
+        <button class="ghost" id="new-field">Scout a new field</button>
+      </div>
+
+      <details class="card tune">
+        <summary>Tune the feel (prototype)</summary>
+        <label class="slider"><span>Game speed <b id="v-speed">1.0×</b></span><input id="t-speed" type="range" min="0.75" max="2" step="0.25" value="1"></label>
+        <label class="slider"><span>Whip power <b id="v-whip">1.0</b></span><input id="t-whip" type="range" min="0.5" max="1.6" step="0.1" value="1"></label>
+        <label class="slider"><span>Stamina drain <b id="v-drain">1.0</b></span><input id="t-drain" type="range" min="0.6" max="1.4" step="0.05" value="1"></label>
+        <label class="slider"><span>Traffic blocking <b id="v-block">1.0</b></span><input id="t-block" type="range" min="0" max="1" step="0.1" value="1"></label>
+      </details>
+
+      <div class="card how">
+        <div class="card-title">How to ride</div>
+        <ul>
+          <li><b>Hold</b> (press and keep holding): settle your horse and save energy.</li>
+          <li><b>Whip</b> (tap): a burst of speed. Best in the home stretch; too much and your horse loses heart.</li>
+          <li><b>Change lanes</b>: drag your horse toward the rail or the outside. It's a request: it costs energy and other horses can block you.</li>
+          <li>Keyboard: <kbd>Z</kbd> hold · <kbd>X</kbd> whip · <kbd>A</kbd> rail · <kbd>D</kbd> wide.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="pre-actions">
+      <button class="big go" id="start-race">Load the gate</button>
+    </div>
+  </section>
+
+  <!-- ============ RACE ============ -->
+  <section id="race" class="screen" aria-label="Race">
+    <div class="race-top">
+      <div class="rt-name"><b id="rt-race">Maiden Sprint</b><span id="rt-phase">At the gate</span></div>
+      <div class="rt-bars">
+        <div class="mini"><span>Energy</span><div class="bar"><i id="b-energy"></i></div></div>
+        <div class="mini"><span>Confidence</span><div class="bar conf capbar"><i id="b-conf"></i><b class="cap" id="b-cap"></b></div></div>
+      </div>
+      <div class="rt-pos" id="rt-pos">–</div>
+    </div>
+    <div class="call" id="call">
+      <div class="call-cur" id="call-cur" aria-live="polite">Horses are loading into the gate…</div>
+      <div class="call-prev" id="call-prev" aria-hidden="true"></div>
+    </div>
+    <div class="ribbon-wrap" aria-label="Running order, leader on the right"><span class="rb-lab">Back</span><div id="ribbon"></div><span class="rb-lab">Lead</span></div>
+
+    <div id="stage">
+      <div id="phaser"></div>
+
+      <div id="infield">
+        <div class="seg small" role="group" aria-label="Who's riding">
+          <button id="r-you" class="on" aria-pressed="true">You</button>
+          <button id="r-auto" aria-pressed="false">Auto</button>
+        </div>
+        <div class="plan-mini">
+          <span class="pl">Start</span><span class="done" id="pm-start">Steady Break ✓</span>
+          <label class="pl now" for="pm-track">Track</label>
+          <select id="pm-track">
+            <option value="lead">Push for Lead</option>
+            <option value="stalk">Chase the Leaders</option>
+            <option value="mid">Mid-Pack Cruise</option>
+            <option value="lag">Lag Back</option>
+          </select>
+          <label class="pl" for="pm-close">Close</label>
+          <select id="pm-close">
+            <option value="early">Early Move</option>
+            <option value="late">Late Kick</option>
+            <option value="protect">Protect the Lead</option>
+            <option value="dig">Dig In</option>
+          </select>
+        </div>
+        <div class="hint" id="lane-hint">Drag your horse to change lanes</div>
+      </div>
+
+      <div id="controls">
+        <button id="btn-hold" class="ctl hold">HOLD</button>
+        <button id="btn-whip" class="ctl whip">WHIP!</button>
+      </div>
+      <div id="lane-controls" hidden>
+        <button id="btn-rail" class="ctl lane on" aria-pressed="true">RAIL</button>
+        <button id="btn-wide" class="ctl lane" aria-pressed="false">WIDE</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ RESULTS ============ -->
+  <section id="results" class="screen" aria-label="Results">
+    <div class="res-head">
+      <div class="eyebrow">Official result</div>
+      <h2 id="res-title">You finished 3rd</h2>
+      <p id="res-sub" class="sub"></p>
+    </div>
+    <ol class="res-list" id="res-list"></ol>
+    <div class="card gift-card" id="gift-card" hidden>
+      <div class="gift-ico" id="gift-ico">🎁</div>
+      <div>
+        <div class="card-title" id="gift-title">A gift from the crowd</div>
+        <p id="gift-text"></p>
+        <div class="gift-btns" id="gift-btns">
+          <button class="big go" id="gift-accept">Accept</button>
+          <button class="big ghost" id="gift-decline">No thanks</button>
+        </div>
+      </div>
+    </div>
+    <div class="card praise" id="praise-card">
+      <div class="card-title">How do you greet your horse?</div>
+      <p class="mood" id="mood-line">Gale Runner is …</p>
+      <div class="greet-grid" role="group" aria-label="Greeting">
+        <button class="greet" data-g="praise">Praise</button>
+        <button class="greet" data-g="sit">Sit With</button>
+        <button class="greet" data-g="space">Give Space</button>
+        <button class="greet scold" data-g="scold">Scold</button>
+      </div>
+      <div class="muted" id="praise-msg"></div>
+      <ul class="growth-log" id="growth-log"></ul>
+    </div>
+    <div class="pre-actions">
+      <button class="big ghost" id="to-paddock">Back to stable</button>
+      <button class="big go" id="race-again">Race again</button>
+    </div>
+  </section>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

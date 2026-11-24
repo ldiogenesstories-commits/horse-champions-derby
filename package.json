@@ -1,0 +1,25 @@
+{
+  "name": "horse-champions-derby",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Horse Champions Derby — Phase 1 greybox race prototype",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "sim:test": "tsx scripts/balance.ts",
+    "narration:test": "tsx scripts/narration.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
+    "phaser": "^3.90.0",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4"
+  }
+}
