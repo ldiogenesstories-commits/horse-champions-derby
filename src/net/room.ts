@@ -11,6 +11,7 @@ export interface Member {
   tv: boolean; // a shared screen with no horse of its own
   ready: boolean;
   horse?: unknown; // HorseDef, sent as plain data
+  ride?: unknown; // plan + condition for the race
   jockey?: unknown;
   joinedAt: number;
 }

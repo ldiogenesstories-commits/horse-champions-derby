@@ -599,3 +599,11 @@ button.st-nameplate.editable { cursor: pointer; }
 .lb-members li.ready .lb-state { color: var(--turf); }
 .lb-wait { text-align: center; margin: 12px 0; }
 #lb-ready { margin-top: 8px; }
+/* Family race: TV screen shows the race and commentary only */
+#race.tv #infield, #race.tv #controls, #race.tv #lane-controls { display: none !important; }
+.lb-final { border-color: var(--brass); }
+.lb-results { margin: 6px 0 0; padding-left: 22px; display: grid; gap: 6px; }
+.lb-results li { display: list-item; }
+.lb-results .lb-face { display: inline-grid; vertical-align: middle; width: 36px; height: 36px; margin-right: 6px; }
+.lb-results small { color: var(--ink-soft); font-weight: 700; }
+.lb-tv { margin: 14px 2px 0; }

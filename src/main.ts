@@ -22,8 +22,9 @@ import { DEFAULT_LOOK, horseBodySVG, type Look } from './game/horseBody';
 import { CAREER_RACES, NEW_CAREER, badgesFor, cardHTML, careerPoints, makeCode, rankFor, type CareerLog, type RetiredCard } from './career/career';
 import { makeFoal } from './sim/field';
 import { runBreeding } from './career/breedingScreen';
-import { runLobby, type StartMsg } from './net/lobby';
-import type { Member, Room } from './net/room';
+import { runLobby, type Lobby, type StartMsg } from './net/lobby';
+import { deviceId, type Member, type Msg, type Room } from './net/room';
+import { applySnapshot, buildEntrants, horseIdFor, makeSnapshot, type Snapshot } from './net/netRace';
 import { cleanName } from './game/names';
 import { potentialOf, sparksOf } from './sim/growth';
 import { CRITTER_SVG, FRIENDS, rosetteSVG, webSVG, type FriendId } from './game/critters';
@@ -195,7 +196,7 @@ function setRide(auto: boolean, inRace: boolean): void {
   ($('infield').querySelector('.plan-mini') as HTMLElement).hidden = !auto;
   $('lane-controls').hidden = !auto;
   $('lane-hint').textContent = auto ? 'Auto jockey rides your plan' : 'Drag your horse to change lanes';
-  if (inRace && race) race.input('player', { auto });
+  if (inRace && race) myInput({ auto });
   setLaneButtons(plan.lane);
 }
 
@@ -207,7 +208,19 @@ function setLaneButtons(lane: LanePref): void {
 }
 
 // ---------- Race ----------
+// Which horse this device controls ('player' in solo races, p-<device> in family races).
+let myHorseId = 'player';
+/** Send an input for this device's horse (and to the host, in a family race). */
+function myInput(inp: Parameters<Race['input']>[1]): void {
+  race?.input(myHorseId, inp);
+  if (net && !net.host && !net.tv) net.room.send({ type: 'input', horseId: myHorseId, inp });
+}
+
 function startRace(): void {
+  myHorseId = 'player';
+  net = null;
+  netDone = false;
+  $('race').classList.remove('tv');
   field = makeField(fieldSeed, player, { ...plan }, rideAuto, confidence, 8, confCap, pendingBuff);
   if (pendingBuff) setTimeout(() => setCall(`${player.name} is In Form today!`, 'player'), 50);
   pendingBuff = undefined;
@@ -219,20 +232,30 @@ function startRace(): void {
   eventEntered = false;
   $('race').classList.toggle('night', raceEvent?.id === 'night');
   $('rt-race').textContent = raceEvent ? `${raceEvent.name} · ${DIST_INFO[distKey].label}` : DIST_INFO[distKey].race;
+  launchRace(fieldSeed * 7 + raceCount);
+}
+
+/** Show the race screen and start the scene for whatever race is set up. */
+function launchRace(narratorSeed: number): void {
   greeted = false;
   ($('pm-track') as HTMLSelectElement).value = plan.track;
   ($('pm-close') as HTMLSelectElement).value = plan.close;
   $('pm-start').textContent = `${START_LABEL[plan.start]} ✓`;
-  narrator = new Narrator(fieldSeed * 7 + raceCount);
+  narrator = new Narrator(narratorSeed);
   $('call-cur').textContent = '';
   $('call-prev').textContent = '';
   lastCallId = -1;
   lastTickMs = performance.now();
   setCall('Horses are loading into the gate…', 'info');
   show('race');
-  setRide(rideAuto, false);
-  scene.setPlayerPortrait(portraitSVG(player, 96));
-  scene.setup(race, hooks, tuning.gameSpeed);
+  if (net) {
+    // Family races start hand-ridden (every device agrees); keep your solo preference.
+    const keep = rideAuto;
+    setRide(false, false);
+    rideAuto = keep;
+  } else setRide(rideAuto, false);
+  if (!net?.tv) scene.setPlayerPortrait(portraitSVG(player, 96));
+  scene.setup(race!, hooks, tuning.gameSpeed);
   if (!game) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     scene.setDpr(dpr);
@@ -338,8 +361,12 @@ const hooks = {
     }
   },
   onTick(r: Race) {
+    if (net?.host && performance.now() - lastSnapMs > 100) {
+      lastSnapMs = performance.now();
+      net.room.send({ type: 'snap', snap: makeSnapshot(r) });
+    }
     const p = r.player;
-    if (!p) return;
+    if (!p) { tickNarration(r); return; }
     renderRibbon(r);
     $('b-energy').style.width = `${p.energy}%`;
     $('b-conf').style.width = `${p.confidence}%`;
@@ -351,6 +378,18 @@ const hooks = {
     $('rt-phase').textContent = laps > 1 ? `Lap ${lap} of ${laps} · ${phaseText}` : `${phaseText} · ${pct}%`;
     $('pm-track').classList.toggle('now', p.phase === 'track' || p.phase === 'start');
     $('pm-close').classList.toggle('now', p.phase === 'close');
+    tickNarration(r);
+  },
+  onFinish(r: Race) {
+    if (net) { if (net.host) { net.room.send({ type: 'final', snap: makeSnapshot(r) }); finishFamilyRace(); } return; }
+    showResults(r);
+  },
+  onLaneRequest(lane: number) {
+    myInput({ lane });
+  },
+};
+
+function tickNarration(r: Race): void {
     const now = performance.now();
     const call = narrator.update(r, Math.min(0.25, (now - lastTickMs) / 1000));
     lastTickMs = now;
@@ -358,14 +397,7 @@ const hooks = {
       lastCallId = call.id;
       setCall(call.text, call.kind);
     }
-  },
-  onFinish(r: Race) {
-    showResults(r);
-  },
-  onLaneRequest(lane: number) {
-    race?.input('player', { lane });
-  },
-};
+}
 
 // ---------- Results ----------
 function showResults(r: Race): void {
@@ -435,8 +467,8 @@ function showResults(r: Race): void {
   renderGrowthLog();
   renderGift();
   const done = raceCount >= CAREER_RACES;
-  $('race-again').hidden = done;
-  $('to-paddock').textContent = done ? 'Retirement ceremony 🎉' : 'Back to stable';
+  $('race-again').hidden = done || !!net;
+  $('to-paddock').textContent = net ? 'Back to the family room' : done ? 'Retirement ceremony 🎉' : 'Back to stable';
   if (done) $('res-title').textContent += ` · Farewell race`;
   show('results');
 }
@@ -529,26 +561,27 @@ $('race-again').addEventListener('click', () => { fieldSeed++; startRace(); });
 $('to-paddock').addEventListener('click', () => {
   fieldSeed++;
   save();
+  if (net && lobby) { show('family'); lobby.backToRoom(); return; }
   if (raceCount >= CAREER_RACES) retire();
   else show('stable');
 });
 for (const b of document.querySelectorAll<HTMLButtonElement>('.greet')) b.addEventListener('click', () => greet(b.dataset.g as Greeting));
 
-$('pm-track').addEventListener('change', (e) => race?.input('player', { track: (e.target as HTMLSelectElement).value as TrackPlan }));
-$('pm-close').addEventListener('change', (e) => race?.input('player', { close: (e.target as HTMLSelectElement).value as ClosePlan }));
-$('btn-rail').addEventListener('click', () => { plan.lane = 'rail'; setLaneButtons('rail'); race?.input('player', { lanePref: 'rail' }); });
-$('btn-wide').addEventListener('click', () => { plan.lane = 'wide'; setLaneButtons('wide'); race?.input('player', { lanePref: 'wide' }); });
+$('pm-track').addEventListener('change', (e) => myInput({ track: (e.target as HTMLSelectElement).value as TrackPlan }));
+$('pm-close').addEventListener('change', (e) => myInput({ close: (e.target as HTMLSelectElement).value as ClosePlan }));
+$('btn-rail').addEventListener('click', () => { plan.lane = 'rail'; setLaneButtons('rail'); myInput({ lanePref: 'rail' }); });
+$('btn-wide').addEventListener('click', () => { plan.lane = 'wide'; setLaneButtons('wide'); myInput({ lanePref: 'wide' }); });
 
 // Hold: press and keep holding. Whip: tap.
 const holdBtn = $('btn-hold');
-const setHold = (v: boolean) => { holdBtn.classList.toggle('pressed', v); race?.input('player', { hold: v }); };
+const setHold = (v: boolean) => { holdBtn.classList.toggle('pressed', v); myInput({ hold: v }); };
 holdBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); holdBtn.setPointerCapture(e.pointerId); setHold(true); });
 for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) holdBtn.addEventListener(ev, () => setHold(false));
 const whipBtn = $('btn-whip');
 whipBtn.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   whipBtn.classList.add('pressed');
-  race?.input('player', { whip: true });
+  myInput({ whip: true });
   setTimeout(() => whipBtn.classList.remove('pressed'), 110);
 });
 for (const b of [holdBtn, whipBtn]) b.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -557,7 +590,7 @@ window.addEventListener('keydown', (e) => {
   if (!$('race').classList.contains('active') || e.repeat) return;
   const k = e.key.toLowerCase();
   if (k === 'z') setHold(true);
-  else if (k === 'x' || k === ' ') { e.preventDefault(); race?.input('player', { whip: true }); }
+  else if (k === 'x' || k === ' ') { e.preventDefault(); myInput({ whip: true }); }
   else if (k === 'a') scene.nudgeLane(-1);
   else if (k === 'd') scene.nudgeLane(+1);
 });
@@ -1205,22 +1238,66 @@ function alertFatigue(): void {
 $('pre-back').addEventListener('click', () => show('stable'));
 
 // ---------- Family race ----------
-let leaveLobby: (() => void) | null = null;
+let lobby: Lobby | null = null;
+let net: { room: Room; host: boolean; tv: boolean } | null = null;
+let netDone = false;
+let lastSnapMs = 0;
+const handledRooms = new WeakSet<Room>();
+
 function openFamily(): void {
-  leaveLobby?.();
+  lobby?.leave();
   show('family');
-  leaveLobby = runLobby($('family-root'), {
+  lobby = runLobby($('family-root'), {
     horse: () => structuredClone(player),
+    ride: () => ({ plan: { ...plan }, confidence, confCap, startEnergy: startEnergy() }),
     jockey: () => jockey,
     distances: (Object.keys(DIST_INFO) as DistanceKey[]).map((k) => ({ key: k, label: DIST_INFO[k].label })),
     onStart: (room, start, members) => startFamilyRace(room, start, members),
-    onBack: () => { leaveLobby?.(); leaveLobby = null; show('pre'); },
+    onBack: () => { lobby?.leave(); lobby = null; net = null; show('pre'); },
   });
 }
-function startFamilyRace(_room: Room, start: StartMsg, members: Member[]): void {
-  // Placeholder until the synced race lands: confirm everyone got the start signal.
-  $('family-root').insertAdjacentHTML('beforeend', `<p class="muted lb-wait" id="lb-started">Starting the ${start.distKey} with ${start.roster.length} family horse${start.roster.length === 1 ? '' : 's'} (${members.length} devices)…</p>`);
+
+function handleNet(room: Room, m: Msg): void {
+  if (!net || net.room !== room || !race) return;
+  if (m.type === 'input' && net.host) race.input(m.horseId as string, m.inp as Parameters<Race['input']>[1]);
+  else if (m.type === 'snap' && !net.host) applySnapshot(race, m.snap as Snapshot);
+  else if (m.type === 'final' && !net.host) { applySnapshot(race, m.snap as Snapshot); race.finished = true; finishFamilyRace(); }
 }
+
+function startFamilyRace(room: Room, start: StartMsg, members: Member[]): void {
+  const host = members[0]?.id === deviceId;
+  const tv = !start.roster.some((r) => r.id === deviceId);
+  net = { room, host, tv };
+  netDone = false;
+  if (!handledRooms.has(room)) { handledRooms.add(room); room.onMessage((m) => handleNet(room, m)); }
+  distKey = start.distKey as DistanceKey;
+  tuning.gameSpeed = DIST_INFO[distKey].speed;
+  field = buildEntrants(start.seed, start.roster, deviceId);
+  myHorseId = horseIdFor(deviceId);
+  const mine = start.roster.find((r) => r.id === deviceId);
+  if (mine) Object.assign(plan, mine.ride.plan);
+  race = new Race(field, start.seed, tuning, DISTANCES[distKey]);
+  raceEvent = null;
+  $('race').classList.remove('night');
+  $('race').classList.toggle('tv', tv);
+  $('rt-race').textContent = `Family race · ${DIST_INFO[distKey].label}`;
+  launchRace(start.seed);
+}
+
+/** The host called the finish: everyone gets their own results. */
+function finishFamilyRace(): void {
+  if (netDone || !race || !net) return;
+  netDone = true;
+  if (net.tv) {
+    const st = race.standings();
+    lobby?.backToRoom();
+    lobby?.showFinal(`<div class="card-title">Final results</div><ol class="lb-results">${st.map((h) => `<li><span class="lb-face">${portraitSVG(h.def, 36)}</span><b>${h.def.name}</b>${h.def.id.startsWith('p-') ? '' : ' <small>(computer)</small>'}</li>`).join('')}</ol>`);
+    show('family');
+    return;
+  }
+  showResults(race);
+}
+
 $('go-family').addEventListener('click', openFamily);
 $('gift-accept').addEventListener('click', () => answerGift(true));
 $('gift-decline').addEventListener('click', () => answerGift(false));
