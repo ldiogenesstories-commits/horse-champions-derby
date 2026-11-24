@@ -115,7 +115,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
         <button class="big go lb-wide" id="lb-start" ${allReady ? '' : 'disabled'}>${allReady ? 'Start the race!' : `Waiting for ${waitingOn.join(', ')} to tap “I'm ready!”`}</button></div>`;
       host.querySelectorAll<HTMLButtonElement>('[data-dist]').forEach((b) => b.addEventListener('click', () => { distKey = b.dataset.dist!; render(); }));
       $('lb-start').addEventListener('click', () => {
-        const roster: RosterEntry[] = racers().slice(0, MAX_HORSES).map((m) => ({ id: m.id, horse: m.horse as HorseDef, name: m.name, ride: m.ride as Ride }));
+        const roster: RosterEntry[] = racers().slice(0, MAX_HORSES).map((m) => ({ id: m.id, horse: m.horse as HorseDef, name: m.name, ride: m.ride as Ride, jockey: m.jockey }));
         const start: StartMsg = { type: 'start', seed: Math.floor(Math.random() * 1e9), distKey, roster };
         room!.send(start as unknown as Omit<Msg, 'from'>);
         o.onStart(room!, start, members);

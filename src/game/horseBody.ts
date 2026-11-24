@@ -71,7 +71,7 @@ function tail(style: TailStyle, hair: string, shade: string): string {
     <path d="M94 158 C92 166 88 170 84 172 C90 172 96 168 98 160" fill="${hair}"/>`;
 }
 
-export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string } = {}): string {
+export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string; pose?: number } = {}): string {
   const c = COATS[def.coat ?? 'bay'];
   const hair = c.mane;
   const shade = c.shade;
@@ -83,10 +83,18 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
     : m === 'snip' ? '<ellipse cx="333" cy="80" rx="3" ry="4" fill="#FFFBF2"/>' : '';
   const hoof = look.polish ? '#2B2118' : '#4A3B2C';
   const LEGS = [[262, 276], [236, 252], [116, 130], [90, 104]];
-  const hoofs = LEGS
-    .map(([a, b], i) => `<polygon class="hoof" data-i="${i}" points="${a - 1},256 ${b + 1},256 ${b + 3},266 ${a - 3},266" fill="${opts.picked?.[i] ? '#5FB36F' : hoof}"/>${look.polish ? `<rect x="${a + 1}" y="258" width="4" height="5" fill="#FFFBF2" opacity="0.55"/>` : ''}`).join('');
-  const wraps = look.wraps ? LEGS
-    .map(([a, b]) => `<rect x="${a - 2}" y="228" width="${b - a + 4}" height="24" rx="3" fill="${silk}" stroke="#2B2118" stroke-width="1.5"/><path d="M${a - 2} 236 H${b + 2} M${a - 2} 244 H${b + 2}" stroke="#FFFBF2" stroke-width="1.5" opacity="0.6"/>`).join('') : '';
+  const hoofOf = (i: number) => { const [a, b] = LEGS[i]; return `<polygon class="hoof" data-i="${i}" points="${a - 1},256 ${b + 1},256 ${b + 3},266 ${a - 3},266" fill="${opts.picked?.[i] ? '#5FB36F' : hoof}"/>${look.polish ? `<rect x="${a + 1}" y="258" width="4" height="5" fill="#FFFBF2" opacity="0.55"/>` : ''}`; };
+  const wrapOf = (i: number) => { if (!look.wraps) return ''; const [a, b] = LEGS[i]; return `<rect x="${a - 2}" y="228" width="${b - a + 4}" height="24" rx="3" fill="${silk}" stroke="#2B2118" stroke-width="1.5"/><path d="M${a - 2} 236 H${b + 2} M${a - 2} 244 H${b + 2}" stroke="#FFFBF2" stroke-width="1.5" opacity="0.6"/>`; };
+  // Legs (index matches LEGS: near front, far front, near hind, far hind). Each swings
+  // from its hip like a paper puppet when a gallop pose (0..1 through the stride) is given.
+  const LEG_SHAPE = ['258,170 276,170 278,256 262,256', '236,170 252,170 252,256 236,256',
+    '122,158 146,166 132,214 130,256 116,256 118,212', '102,158 124,164 106,214 104,256 90,256 92,212'];
+  const HIP: [number, number][] = [[267, 172], [244, 172], [134, 164], [113, 162]];
+  const PHASE = [0, 0.14, 0.5, 0.64];
+  const SWING = [26, 24, 22, 20];
+  const angle = (i: number) => (opts.pose === undefined ? 0 : -SWING[i] * Math.sin(2 * Math.PI * (opts.pose + PHASE[i])));
+  const leg = (i: number) => `<g transform="rotate(${angle(i).toFixed(1)} ${HIP[i][0]} ${HIP[i][1]})"><polygon points="${LEG_SHAPE[i]}" fill="${i % 2 ? shade : c.body}"/>${wrapOf(i)}${hoofOf(i)}</g>`;
+  const bob = opts.pose === undefined ? 0 : -5 * Math.abs(Math.sin(2 * Math.PI * opts.pose));
   const pad = look.pad ? `<path d="M168 104 C188 100 212 100 230 104 L236 150 C210 156 186 156 162 150 Z" fill="${silk}" stroke="#2B2118" stroke-width="2"/>
     <path d="M172 110 C190 106 210 106 226 110 L230 144 C208 148 188 148 168 144 Z" fill="none" stroke="#FFFBF2" stroke-width="2.5" stroke-dasharray="5 3"/>` : '';
   const crown = look.crown ? [[278, 40, '#F7A8B8'], [286, 30, '#FFD23F'], [295, 26, '#FFFBF2'], [304, 30, '#F7A8B8'], [282, 50, '#9CC3D5']]
@@ -104,10 +112,9 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
 
   return `<svg viewBox="40 0 320 290" class="horse-body" role="img" aria-label="${def.name}, full body">
   <ellipse cx="190" cy="268" rx="130" ry="10" fill="#2B2118" opacity="0.18"/>
-  <g style="filter: drop-shadow(2px 3px 0 rgba(43,33,24,.28))">
+  <g style="filter: drop-shadow(2px 3px 0 rgba(43,33,24,.28))" transform="translate(0 ${bob.toFixed(1)})">
     <!-- far legs -->
-    <polygon points="236,170 252,170 252,256 236,256" fill="${shade}"/>
-    <polygon points="102,158 124,164 106,214 104,256 90,256 92,212" fill="${shade}"/>
+    ${leg(1)}${leg(3)}
     ${look.tail === 'bun' ? '' : tail(look.tail, hair, shade)}
     <!-- body, neck, head -->
     <path d="M92 132 C92 106 130 98 170 104 C205 108 226 104 240 102 L284 128 C292 160 280 182 252 186 L132 188 C106 188 90 166 92 132 Z" fill="${c.body}"/>
@@ -118,8 +125,7 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
     <circle cx="306" cy="52" r="3" fill="#141110"/><circle cx="307" cy="51" r="1" fill="#FFFBF2"/>
     <ellipse cx="333" cy="82" rx="2" ry="1.5" fill="#141110"/>
     <!-- near legs -->
-    <polygon points="258,170 276,170 278,256 262,256" fill="${c.body}"/>
-    <polygon points="122,158 146,166 132,214 130,256 116,256 118,212" fill="${c.body}"/>
+    ${leg(0)}${leg(2)}
     ${look.tail === 'bun' ? tail('bun', hair, shade) : ''}
     ${pad}
     ${mane(look.mane, hair, shade)}
@@ -128,8 +134,6 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
     <g stroke="#FFFBF2" stroke-width="4" fill="none" stroke-linecap="round"><path d="M298 40 L314 88"/><path d="M324 66 L318 92"/></g>
     <g stroke="${silk}" stroke-width="2.6" fill="none" stroke-linecap="round"><path d="M298 40 L314 88"/><path d="M324 66 L318 92"/></g>
     ${opts.rider ?? ''}
-    ${wraps}
-    ${hoofs}
     ${bows}
     ${shine}
   </g>

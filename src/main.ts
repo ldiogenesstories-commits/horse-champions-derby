@@ -30,6 +30,7 @@ import { potentialOf, sparksOf } from './sim/growth';
 import { CRITTER_SVG, FRIENDS, rosetteSVG, webSVG, type FriendId } from './game/critters';
 import { DEFAULT_JOCKEY, silksBadge, type Jockey } from './game/jockey';
 import { runJockeyRoom } from './training/jockeyRoom';
+import { Broadcast } from './game/broadcast';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
 // ---------- State ----------
@@ -217,6 +218,7 @@ function myInput(inp: Parameters<Race['input']>[1]): void {
 }
 
 function startRace(): void {
+  stopBroadcast();
   myHorseId = 'player';
   net = null;
   netDone = false;
@@ -233,6 +235,8 @@ function startRace(): void {
   $('race').classList.toggle('night', raceEvent?.id === 'night');
   $('rt-race').textContent = raceEvent ? `${raceEvent.name} · ${DIST_INFO[distKey].label}` : DIST_INFO[distKey].race;
   launchRace(fieldSeed * 7 + raceCount);
+  // ?bcast previews the big-screen broadcast in a solo race.
+  if (new URLSearchParams(location.search).has('bcast')) { $('race').classList.add('tv'); startBroadcast(new Map([['player', jockey]]), $('rt-race').textContent ?? ''); }
 }
 
 /** Show the race screen and start the scene for whatever race is set up. */
@@ -401,6 +405,7 @@ function tickNarration(r: Race): void {
 
 // ---------- Results ----------
 function showResults(r: Race): void {
+  stopBroadcast();
   const st = r.standings();
   const p = r.player!;
   raceCount++;
@@ -1282,12 +1287,29 @@ function startFamilyRace(room: Room, start: StartMsg, members: Member[]): void {
   $('race').classList.toggle('tv', tv);
   $('rt-race').textContent = `Family race · ${DIST_INFO[distKey].label}`;
   launchRace(start.seed);
+  stopBroadcast();
+  if (tv) {
+    const jockeys = new Map<string, Jockey>();
+    for (const r of start.roster) if (r.jockey) jockeys.set(horseIdFor(r.id), { ...(r.jockey as Jockey), name: (r.jockey as Jockey).name || r.name });
+    startBroadcast(jockeys, `Family race · ${DIST_INFO[distKey].label}`);
+  }
 }
+
+// ---------- Big-screen broadcast ----------
+let broadcast: Broadcast | null = null;
+function startBroadcast(jockeys: Map<string, Jockey>, title: string): void {
+  if (!race) return;
+  broadcast ??= new Broadcast($('stage'), () => {});
+  const r = race;
+  void broadcast.load(r, jockeys).then(() => { if (race === r && broadcast) { broadcast.start(); broadcast.setTitle(title); } });
+}
+function stopBroadcast(): void { broadcast?.stop(); }
 
 /** The host called the finish: everyone gets their own results. */
 function finishFamilyRace(): void {
   if (netDone || !race || !net) return;
   netDone = true;
+  stopBroadcast();
   if (net.tv) {
     const st = race.standings();
     lobby?.backToRoom();

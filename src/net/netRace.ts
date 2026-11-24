@@ -8,7 +8,7 @@ import type { Race } from '../sim/race';
 import type { Entrant, HorseDef, HorseState, RacePlan } from '../sim/types';
 
 export interface Ride { plan: RacePlan; confidence: number; confCap: number; startEnergy: number }
-export interface RosterEntry { id: string; name: string; horse: HorseDef; ride: Ride }
+export interface RosterEntry { id: string; name: string; horse: HorseDef; ride: Ride; jockey?: unknown }
 
 export const horseIdFor = (deviceId: string) => `p-${deviceId}`;
 
