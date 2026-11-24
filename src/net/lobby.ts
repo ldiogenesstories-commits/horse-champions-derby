@@ -44,7 +44,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
       </div>
       <p class="muted lb-status" id="lb-status"></p>`;
     $('lb-back').addEventListener('click', o.onBack);
-    $('lb-create').addEventListener('click', () => enter(makeRoomCode(), ($('lb-tv') as HTMLInputElement).checked));
+    $('lb-create').addEventListener('click', () => enter(makeRoomCode(), ($('lb-tv') as HTMLInputElement).checked, true));
     const join = () => {
       const c = normalizeCode(($('lb-code') as HTMLInputElement).value);
       if (c.length < 4) { $('lb-status').textContent = 'Type the code shown on the host screen.'; return; }
@@ -54,7 +54,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
     $('lb-code').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') join(); });
   }
 
-  function enter(code: string, tv: boolean): void {
+  function enter(code: string, tv: boolean, creator = false): void {
     lastSig = '';
     root.innerHTML = `
       <div class="lb-top"><div><div class="eyebrow">Room code</div><div class="lb-code" id="lb-roomcode">${code}</div></div><button class="ghost small" id="lb-leave">Leave</button></div>
@@ -67,7 +67,8 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
         : s === 'connecting' ? 'Connecting…'
         : `Couldn't connect (${detail ?? 'error'}). Family play needs the online version of the game.`;
     });
-    me = { id: deviceId, name: o.jockey().name, tv, ready: tv, horse: tv ? undefined : o.horse(), ride: tv ? undefined : o.ride(), jockey: o.jockey(), joinedAt: Date.now() };
+    // The host's "Start" is their ready, so only people who join need to ready up.
+    me = { id: deviceId, name: o.jockey().name, tv, ready: tv || creator, horse: tv ? undefined : o.horse(), ride: tv ? undefined : o.ride(), jockey: o.jockey(), joinedAt: Date.now() };
     room.setMe(me);
     room.onMembers((l) => { members = l; render(); });
     room.onMessage((m: Msg) => {
@@ -98,17 +99,20 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
         <span class="lb-state">${m.tv ? '' : m.ready ? 'Ready ✓' : 'Not ready'}</span></li>`;
     }).join('');
     const ready = $('lb-ready');
-    ready.hidden = me.tv;
+    ready.hidden = me.tv || isHost();
     ready.textContent = me.ready ? 'Not ready yet' : "I'm ready!";
     ready.classList.toggle('go', !me.ready);
     const host = $('lb-host');
     if (isHost()) {
       const rs = racers();
-      const allReady = rs.length > 0 && rs.every((m) => m.ready);
+      const others = rs.filter((m) => m.id !== deviceId);
+      const allReady = rs.length > 0 && others.every((m) => m.ready);
+      // Unnamed jockeys are all "You", so name the horse instead.
+      const waitingOn = others.filter((m) => !m.ready).map((m) => (m.name && m.name !== 'You' ? m.name : (m.horse as HorseDef | undefined)?.name ?? 'a player'));
       host.innerHTML = `<div class="card"><div class="card-title">You're the host</div>
         <div class="gr-chips">${o.distances.map((d) => `<button class="gr-chip${d.key === distKey ? ' on' : ''}" data-dist="${d.key}">${d.label}</button>`).join('')}</div>
         <p class="muted">${rs.length} horse${rs.length === 1 ? '' : 's'} in the room${rs.length < MAX_HORSES ? `; computer horses fill the other ${MAX_HORSES - Math.min(rs.length, MAX_HORSES)} gates` : ''}.</p>
-        <button class="big go lb-wide" id="lb-start" ${allReady ? '' : 'disabled'}>${allReady ? 'Start the race!' : 'Waiting for everyone to be ready…'}</button></div>`;
+        <button class="big go lb-wide" id="lb-start" ${allReady ? '' : 'disabled'}>${allReady ? 'Start the race!' : `Waiting for ${waitingOn.join(', ')} to tap “I'm ready!”`}</button></div>`;
       host.querySelectorAll<HTMLButtonElement>('[data-dist]').forEach((b) => b.addEventListener('click', () => { distKey = b.dataset.dist!; render(); }));
       $('lb-start').addEventListener('click', () => {
         const roster: RosterEntry[] = racers().slice(0, MAX_HORSES).map((m) => ({ id: m.id, horse: m.horse as HorseDef, name: m.name, ride: m.ride as Ride }));
@@ -127,7 +131,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
       if (!room || !me) return;
       const code = room.code;
       root.querySelector('#lb-final')?.remove();
-      me = { ...me, ready: me.tv, horse: me.tv ? undefined : o.horse(), ride: me.tv ? undefined : o.ride() };
+      me = { ...me, ready: me.tv || isHost(), horse: me.tv ? undefined : o.horse(), ride: me.tv ? undefined : o.ride() };
       room.setMe(me);
       lastSig = '';
       if (!root.querySelector('#lb-members')) { room.leave(); enter(code, me.tv); return; }

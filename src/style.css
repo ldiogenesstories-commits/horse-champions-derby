@@ -607,3 +607,4 @@ button.st-nameplate.editable { cursor: pointer; }
 .lb-results .lb-face { display: inline-grid; vertical-align: middle; width: 36px; height: 36px; margin-right: 6px; }
 .lb-results small { color: var(--ink-soft); font-weight: 700; }
 .lb-tv { margin: 14px 2px 0; }
+#lb-start:disabled { background: #D8CFC0; color: var(--ink-soft); box-shadow: 0 4px 0 #B8AE9E; cursor: default; font-size: 16px; }
