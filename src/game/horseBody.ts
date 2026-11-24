@@ -71,7 +71,7 @@ function tail(style: TailStyle, hair: string, shade: string): string {
     <path d="M94 158 C92 166 88 170 84 172 C90 172 96 168 98 160" fill="${hair}"/>`;
 }
 
-export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string; pose?: number; graze?: boolean } = {}): string {
+export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean; dust?: { x: number; y: number }[]; picked?: boolean[]; rider?: string; pose?: number; graze?: boolean; lie?: boolean } = {}): string {
   const c = COATS[def.coat ?? 'bay'];
   const hair = c.mane;
   const shade = c.shade;
@@ -106,7 +106,14 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
   const maneBow = look.bow === 'mane' || look.bow === 'both' ? bow(286, 40, bowC, 0.9) : '';
   const tailBow = look.bow === 'tail' || look.bow === 'both' ? bow(98, look.tail === 'bun' ? 128 : 126, bowC, 0.9) : '';
   // Grazing: the neck and head swing down to the grass.
-  const headT = opts.graze ? 'translate(4 66) rotate(84 252 120)' : '';
+  const headT = opts.graze ? 'translate(4 66) rotate(84 252 120)' : opts.lie ? 'translate(6 18) rotate(30 252 120)' : '';
+  const lie = !!opts.lie;
+  // Lying down: legs folded under the body instead of standing.
+  const folded = `<path d="M232 172 C250 190 292 192 300 178 C304 170 296 166 286 170 C270 176 252 172 240 164 Z" fill="${shade}"/>
+    <path d="M236 176 C258 196 306 198 318 184 C322 176 312 172 300 176 C280 182 258 178 244 168 Z" fill="${c.body}"/>
+    <ellipse cx="318" cy="182" rx="8" ry="6" fill="${hoof}"/>
+    <path d="M100 160 C96 186 150 196 176 186 C186 182 180 172 168 176 C146 182 124 176 118 156 Z" fill="${c.body}"/>
+    <ellipse cx="178" cy="184" rx="8" ry="6" fill="${hoof}"/>`;
   const shine = opts.shine ? `<path d="M120 116 C150 106 190 108 214 112" stroke="#FFFBF2" stroke-width="5" fill="none" opacity="0.45" stroke-linecap="round"/>
     <path d="M250 112 C262 96 272 80 280 64" stroke="#FFFBF2" stroke-width="3" fill="none" opacity="0.35" stroke-linecap="round"/>
     <path d="M134 164 C160 172 200 172 232 166" stroke="#FFFBF2" stroke-width="3" fill="none" opacity="0.25" stroke-linecap="round"/>` : '';
@@ -114,9 +121,9 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
 
   return `<svg viewBox="40 0 320 290" class="horse-body" role="img" aria-label="${def.name}, full body">
   <ellipse cx="190" cy="268" rx="130" ry="10" fill="#2B2118" opacity="0.18"/>
-  <g style="filter: drop-shadow(2px 3px 0 rgba(43,33,24,.28))" transform="translate(0 ${bob.toFixed(1)})">
+  <g style="filter: drop-shadow(2px 3px 0 rgba(43,33,24,.28))" transform="translate(0 ${lie ? 66 : bob.toFixed(1)})">
     <!-- far legs -->
-    ${leg(1)}${leg(3)}
+    ${lie ? '' : leg(1) + leg(3)}
     ${look.tail === 'bun' ? '' : tail(look.tail, hair, shade)}
     <!-- body, neck, head -->
     <path d="M92 132 C92 106 130 98 170 104 C205 108 226 104 240 102 L284 128 C292 160 280 182 252 186 L132 188 C106 188 90 166 92 132 Z" fill="${c.body}"/>
@@ -126,10 +133,10 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
     </g>
     <path d="M132 188 C150 192 220 192 252 186 L250 180 C220 184 160 184 132 182 Z" fill="${shade}"/>
     <g transform="${headT}">${face}
-    <circle cx="306" cy="52" r="3" fill="#141110"/><circle cx="307" cy="51" r="1" fill="#FFFBF2"/>
+    ${lie ? '<path d="M301 52 q5 4 10 0" stroke="#141110" stroke-width="2.2" fill="none" stroke-linecap="round"/>' : '<circle cx="306" cy="52" r="3" fill="#141110"/><circle cx="307" cy="51" r="1" fill="#FFFBF2"/>'}
     <ellipse cx="333" cy="82" rx="2" ry="1.5" fill="#141110"/></g>
     <!-- near legs -->
-    ${leg(0)}${leg(2)}
+    ${lie ? folded : leg(0) + leg(2)}
     ${look.tail === 'bun' ? tail('bun', hair, shade) : ''}
     ${pad}
     <g transform="${headT}">${mane(look.mane, hair, shade)}

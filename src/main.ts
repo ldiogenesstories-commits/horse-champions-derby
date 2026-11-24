@@ -1256,11 +1256,17 @@ function load(): void {
 }
 
 $('go-train').addEventListener('click', openTraining);
-$('train-close').addEventListener('click', () => { $('train-panel').hidden = true; });
+$('train-close').addEventListener('click', () => { $('train-panel').hidden = true; if (onRanch()) closeSheet(); });
 $('drill-list').addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-drill]');
   const d = b && DRILLS.find((x) => x.id === b.dataset.drill && x.ready);
-  if (d) startDrill(d);
+  if (!d) return;
+  if (onRanch() && ranch) {
+    if (!needAction()) return;
+    closeSheet();
+    returnAtGate = true;
+    ranch.play('gate', () => startDrill(d));
+  } else startDrill(d);
 });
 $('go-treats').addEventListener('click', openTreats);
 $('treat-close').addEventListener('click', () => { $('treat-panel').hidden = true; });
@@ -1272,10 +1278,14 @@ $('go-rest').addEventListener('click', rest);
 $('go-feed').addEventListener('click', openFeed);
 $('go-groom').addEventListener('click', openGrooming);
 $('go-jockey').addEventListener('click', openJockeyRoom);
-$('feed-close').addEventListener('click', () => { $('feed-panel').hidden = true; });
+$('feed-close').addEventListener('click', () => { $('feed-panel').hidden = true; if (onRanch()) closeSheet(); });
 $('feed-list').addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-feed]');
-  if (b) feed(b.dataset.feed as FeedId);
+  if (!b) return;
+  if (onRanch() && ranch) {
+    closeSheet();
+    ranch.play('feed', () => { feed(b.dataset.feed as FeedId); renderRanchHud(); });
+  } else feed(b.dataset.feed as FeedId);
 });
 $('go-race').addEventListener('click', () => {
   fieldSeed++;
@@ -1567,8 +1577,10 @@ function enterRanch(): void {
       onGait: (g) => { $('rn-gait').textContent = GAIT_LABEL[g]; },
     });
     setSteering(localStorage.getItem('hcd-ranch-tap') === '1');
+    (window as unknown as { __ranch: Ranch }).__ranch = ranch; // handy for testing in the console
   }
   portalActions = -1;
+  if (returnAtGate) { returnAtGate = false; ranch.place(2230, 480, 'left'); }
   renderRanchHud();
   void ranch.setHorse(player, look);
   ranch.start();
@@ -1592,23 +1604,32 @@ function openBarn(): void {
 }
 
 /** Walking up to a station opens its part of the game. */
+let returnAtGate = false;
+const sheetHome = new Map<string, { parent: Node; next: Node | null }>();
+function sheet(panelId: string): void {
+  const p = $(panelId);
+  if (!sheetHome.has(panelId)) sheetHome.set(panelId, { parent: p.parentNode!, next: p.nextSibling });
+  $('rn-sheet').append(p);
+  $('rn-sheet').hidden = false;
+}
+function closeSheet(): void {
+  for (const [id, h] of sheetHome) { const p = $(id); p.hidden = true; h.parent.insertBefore(p, h.next); }
+  sheetHome.clear();
+  $('rn-sheet').hidden = true;
+}
+const onRanch = () => $('ranch').classList.contains('active');
+
 function usePortal(id: Station['id']): void {
+  if (!ranch || ranch.busy) return;
   if (id === 'barn') { openBarn(); return; }
+  if (!needAction()) return;
   if (id === 'shade') {
-    const before = actionsLeft;
-    rest();
-    renderRanchHud();
-    if (actionsLeft < before) ranch?.place(1240, 330, 'right');
+    ranch.play('rest', () => { rest(); renderRanchHud(); });
     return;
   }
-  // Feed and training use the barn's panels; you come back out to the ranch afterwards.
-  if (!needAction()) return;
-  forceBarn = true;
-  show('stable');
-  forceBarn = false;
-  if (id === 'feed') { portalActions = actionsLeft; openFeed(); }
-  else openTraining();
-  setTimeout(() => (id === 'feed' ? $('feed-panel') : $('train-panel')).scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+  // Feeding and training pick from a sheet over the ranch, then play their cutscene.
+  sheet(id === 'feed' ? 'feed-panel' : 'train-panel');
+  if (id === 'feed') openFeed(); else openTraining();
 }
 
 $('rn-use').addEventListener('click', () => { if (nearStation) usePortal(nearStation.id); });

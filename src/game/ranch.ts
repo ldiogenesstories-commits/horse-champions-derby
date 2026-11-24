@@ -33,6 +33,8 @@ export const STATIONS: Station[] = [
 ];
 
 type Facing = 'right' | 'left' | 'front' | 'back';
+export type Cutscene = 'rest' | 'gate' | 'feed';
+interface Scene { kind: Cutscene; stage: 'walk' | 'act' | 'exit'; t: number; goal: { x: number; y: number; face: Facing } | null; done: () => void; fired: boolean }
 type Gait = 'stand' | 'walk' | 'trot' | 'canter';
 const GAIT_SPEED: Record<Exclude<Gait, 'stand'>, number> = { walk: 95, trot: 185, canter: 300 };
 const STRIDE: Record<Gait, number> = { stand: 1, walk: 80, trot: 105, canter: 140 };
@@ -41,9 +43,13 @@ interface Circle { x: number; y: number; r: number }
 const OBSTACLES: Circle[] = [
   { x: 700, y: 245, r: 60 }, // trough
   { x: 1290, y: 245, r: 34 }, // tree trunk
-  { x: 960, y: 120, r: 48 }, { x: 1030, y: 140, r: 44 }, // hay bales
 ];
-const POND = { x: 1720, y: 660, rx: 190, ry: 110 };
+// Hay bales and the pond can be jumped with a running start (a canter).
+const BALES: { x: number; y: number }[] = [{ x: 960, y: 140 }, { x: 1030, y: 160 }, { x: 520, y: 640 }, { x: 1080, y: 720 }, { x: 2000, y: 560 }];
+const BALE_R = 46;
+const POND = { x: 1720, y: 660, rx: 125, ry: 75 };
+const JUMP_SPEED = 230; // need at least this much pace to take off
+const JUMP_MAX = 380; // longest leap
 const BARN = { x0: 140, x1: 520, y0: 60, y1: 160 };
 
 const loadImage = (svg: string, w: number): Promise<HTMLImageElement> => new Promise((res, rej) => {
@@ -84,6 +90,12 @@ export class Ranch {
   private still = 0; // seconds without input
   private paw = 0;
   private near: Station | null = null;
+  private jump: { t: number; dur: number; h: number } | null = null;
+  private scene: Scene | null = null;
+  private lieImg: HTMLImageElement | null = null;
+  private fade = 0; // 0..1 paper wipe / dusk dim
+  private dim = 0;
+  private bits: { x: number; y: number; vx: number; vy: number; life: number; txt?: string; c?: string }[] = [];
   // Input
   private stick = { x: 0, y: 0 };
   private keys = new Set<string>();
@@ -141,17 +153,19 @@ export class Ranch {
     if (key === this.spriteKey) return;
     this.spriteKey = key;
     const sw = 340;
-    const [side, graze, front, back] = await Promise.all([
+    const [side, graze, front, back, lieImg] = await Promise.all([
       Promise.all(Array.from({ length: SIDE_FRAMES }, (_, f) => loadImage(horseBodySVG(def, look, { pose: f / SIDE_FRAMES }), sw))),
       loadImage(horseBodySVG(def, look, { graze: true }), sw),
       Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseFrontSVG(def, look, null, f / FB_FRAMES), Math.round(sw * 200 / 320)))),
       Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseBackSVG(def, look, f / FB_FRAMES), Math.round(sw * 200 / 320)))),
+      loadImage(horseBodySVG(def, look, { lie: true }), sw),
     ]);
-    Object.assign(this, { side, graze, front, back });
+    Object.assign(this, { side, graze, front, back, lieImg });
   }
 
   start(): void {
     if (this.raf) return;
+    if (!this.scene) { this.fade = 0; this.dim = 0; }
     this.last = performance.now();
     const loop = (now: number) => { this.tick(now); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
@@ -159,11 +173,65 @@ export class Ranch {
 
   stop(): void { cancelAnimationFrame(this.raf); this.raf = 0; this.keys.clear(); this.stick = { x: 0, y: 0 }; }
 
+  get busy(): boolean { return !!this.scene; }
+
+  /**
+   * A little cutscene for a station action. `done` runs at the moment the action
+   * happens (the horse lies down, eats, or has trotted out the gate).
+   */
+  play(kind: Cutscene, done: () => void): void {
+    const goal = kind === 'rest' ? { x: 1215, y: 345, face: 'right' as Facing }
+      : kind === 'feed' ? { x: 606, y: 292, face: 'right' as Facing }
+      : { x: 2210, y: 480, face: 'right' as Facing };
+    this.scene = { kind, stage: 'walk', t: 0, goal, done, fired: false };
+    this.target = null; this.stick = { x: 0, y: 0 }; this.keys.clear();
+    this.hooks.onNear(null); this.near = null;
+  }
+
   /** Put the horse somewhere (e.g. under the tree after a rest). */
-  place(x: number, y: number, facing: Facing = 'right'): void { this.camInit = false; this.x = x; this.y = y; this.facing = facing; this.speed = 0; this.target = null; this.still = 4; }
+  place(x: number, y: number, facing: Facing = 'right'): void { this.camInit = false; this.scene = null; this.fade = 0; this.dim = 0; this.x = x; this.y = y; this.facing = facing; this.speed = 0; this.target = null; this.still = 4; }
 
   // ---------- simulation ----------
+  /** Is this spot inside a jumpable thing (bale or pond), with the horse's size added? */
+  private inJumpable(x: number, y: number): boolean {
+    const pad = HORSE_R;
+    for (const b of BALES) if (Math.hypot(x - b.x, y - b.y) < BALE_R + pad) return true;
+    return Math.hypot((x - POND.x) / (POND.rx + pad), (y - POND.y) / (POND.ry + pad * 0.6)) < 1;
+  }
+
+  private blockedSolid(x: number, y: number): boolean {
+    if (x < FENCE.x0 + HORSE_R || x > FENCE.x1 - HORSE_R || y < FENCE.y0 + HORSE_R * 0.6 || y > FENCE.y1 - HORSE_R * 0.4) return true;
+    if (x > BARN.x0 - HORSE_R && x < BARN.x1 + HORSE_R && y < BARN.y1 + HORSE_R * 0.5) return true;
+    return OBSTACLES.some((o) => Math.hypot(x - o.x, y - o.y) < o.r + HORSE_R);
+  }
+
+  /** Cantering into a bale or the pond: leap if there's a clear landing within reach. */
+  private tryJump(): boolean {
+    const cx = Math.cos(this.heading); const cy = Math.sin(this.heading);
+    let entered = false;
+    for (let d = 4; d <= JUMP_MAX; d += 4) {
+      const x = this.x + cx * d; const y = this.y + cy * d;
+      if (this.blockedSolid(x, y)) return false;
+      const inside = this.inJumpable(x, y);
+      if (inside) entered = true;
+      else if (entered) {
+        const len = d + 30;
+        if (this.blockedSolid(this.x + cx * len, this.y + cy * len)) return false;
+        this.jump = { t: 0, dur: len / this.speed, h: 30 + len * 0.11 };
+        return true;
+      }
+    }
+    return false;
+  }
+
   private input(): { x: number; y: number } {
+    const sc = this.scene;
+    if (sc) {
+      if (sc.stage !== 'walk' || !sc.goal) return { x: 0, y: 0 };
+      const dx = sc.goal.x - this.x; const dy = sc.goal.y - this.y; const d = Math.hypot(dx, dy);
+      const p = d < 60 ? 0.3 : 0.7;
+      return { x: (dx / d) * p, y: (dy / d) * p };
+    }
     let x = this.stick.x;
     let y = this.stick.y;
     const k = this.keys;
@@ -184,7 +252,57 @@ export class Ranch {
     return { x, y };
   }
 
+  private runScene(dt: number): boolean {
+    const sc = this.scene;
+    if (!sc) return false;
+    sc.t += dt;
+    if (sc.stage === 'walk') {
+      const g = sc.goal!;
+      if (Math.hypot(g.x - this.x, g.y - this.y) < 16 || sc.t > 5) {
+        if (sc.t > 5) { this.x = g.x; this.y = g.y; }
+        this.speed = 0; this.facing = g.face; this.heading = 0; this.gait = 'stand'; this.hooks.onGait?.('stand');
+        sc.stage = sc.kind === 'gate' ? 'exit' : 'act'; sc.t = 0;
+        if (sc.kind === 'gate') { this.speed = GAIT_SPEED.trot; this.gait = 'trot'; this.hooks.onGait?.('trot'); }
+      }
+      return false; // normal movement code walks the horse there
+    }
+    if (sc.kind === 'gate') {
+      // Trot out through the open gate, then a paper wipe.
+      this.x += this.speed * dt; this.phase = (this.phase + (this.speed * dt) / STRIDE.trot) % 1;
+      if (Math.random() < dt * 6) this.dust.push({ x: this.x - 50, y: this.y + 2, r: 6, life: 0.5 });
+      if (this.x > FENCE.x1 - 20) this.fade = Math.min(1, this.fade + dt * 1.8);
+      if (this.fade >= 1 && !sc.fired) { sc.fired = true; sc.done(); }
+      return true;
+    }
+    if (sc.kind === 'rest') {
+      const LIE = 3.2;
+      this.dim = Math.min(0.42, sc.t < LIE - 0.6 ? sc.t * 0.35 : Math.max(0, 0.42 - (sc.t - (LIE - 0.6)) * 0.8));
+      if (sc.t > 0.6 && Math.random() < dt * 2.2) this.bits.push({ x: this.x + 120, y: this.sy(this.y) - 60, vx: 14, vy: -30, life: 1.6, txt: 'z' });
+      if (sc.t > LIE - 0.6 && !sc.fired) { sc.fired = true; sc.done(); }
+      if (sc.t > LIE) { this.scene = null; this.dim = 0; this.still = 0; }
+      return true;
+    }
+    // feed: head in the trough, munching.
+    const EAT = 2.2;
+    if (Math.random() < dt * 9) this.bits.push({ x: this.x + 78 + Math.random() * 16, y: this.sy(this.y) - 30, vx: (Math.random() - 0.5) * 40, vy: -40 - Math.random() * 30, life: 0.6, c: Math.random() < 0.5 ? '#E2C46A' : '#E2793B' });
+    if (sc.t > 0.8 && !sc.fired) { sc.fired = true; sc.done(); }
+    if (sc.t > EAT) { this.scene = null; this.still = 0; }
+    return true;
+  }
+
   private step(dt: number): void {
+    if (this.runScene(dt)) return;
+    if (this.jump) {
+      const j = this.jump;
+      j.t += dt;
+      this.x += Math.cos(this.heading) * this.speed * dt;
+      this.y += Math.sin(this.heading) * this.speed * dt;
+      if (j.t >= j.dur) {
+        this.jump = null;
+        for (let i = 0; i < 4; i++) this.dust.push({ x: this.x + (i - 1.5) * 18, y: this.y + 2, r: 7, life: 0.7 });
+      }
+      return;
+    }
     const inp = this.input();
     const mag = Math.min(1, Math.hypot(inp.x, inp.y));
     // Pick the gait from how hard the stick is pushed.
@@ -212,7 +330,8 @@ export class Ranch {
     if (ny < FENCE.y0 + pad * 0.6 || ny > FENCE.y1 - pad * 0.4) { ny = Math.max(FENCE.y0 + pad * 0.6, Math.min(FENCE.y1 - pad * 0.4, ny)); vy = 0; }
     // Barn footprint.
     if (nx > BARN.x0 - pad && nx < BARN.x1 + pad && ny < BARN.y1 + pad * 0.5) { ny = BARN.y1 + pad * 0.5; vy = Math.max(0, vy); }
-    for (const o of OBSTACLES) {
+    if (this.speed >= JUMP_SPEED && mag >= 0.12 && this.inJumpable(nx, ny) && this.tryJump()) return;
+    for (const o of [...OBSTACLES, ...BALES.map((b) => ({ ...b, r: BALE_R }))]) {
       const dx = nx - o.x; const dy = ny - o.y; const d = Math.hypot(dx, dy); const min = o.r + pad;
       if (d < min && d > 0.01) { nx = o.x + (dx / d) * min; ny = o.y + (dy / d) * min; }
     }
@@ -240,6 +359,7 @@ export class Ranch {
     this.paw = Math.max(0, this.paw - dt);
     if (this.still > 2 && this.still < 3.5 && this.paw === 0 && Math.random() < dt * 0.6) { this.paw = 0.9; this.dust.push({ x: this.x + (this.facing === 'left' ? -40 : 40), y: this.y + 4, r: 6, life: 0.6 }); }
     // Stations.
+    if (this.scene) return;
     let near: Station | null = null;
     for (const s of STATIONS) if (Math.hypot(this.x - s.x, (this.y - s.y) * 1.3) < 105) near = s;
     if (near !== this.near) { this.near = near; this.hooks.onNear(near); }
@@ -272,6 +392,24 @@ export class Ranch {
     const g = this.g;
     g.setTransform(dpr * this.k, 0, 0, dpr * this.k, -this.camX * dpr * this.k, -this.camY * dpr * this.k);
     this.drawWorld(g, now / 1000, dt, viewW, viewH);
+    // Floating bits (Zzz, munched hay).
+    for (const b of this.bits) { b.life -= dt; b.x += b.vx * dt; b.y += b.vy * dt; if (!b.txt) b.vy += 160 * dt; }
+    this.bits = this.bits.filter((b) => b.life > 0);
+    for (const b of this.bits) {
+      g.globalAlpha = Math.min(1, b.life * 1.5);
+      if (b.txt) { g.fillStyle = PAPER; g.strokeStyle = INK; g.lineWidth = 3; g.font = `900 ${Math.round(22 + (1.6 - b.life) * 14)}px system-ui, sans-serif`; g.textAlign = 'center'; g.strokeText(b.txt, b.x, b.y); g.fillText(b.txt, b.x, b.y); }
+      else { g.fillStyle = b.c!; g.fillRect(b.x - 3, b.y - 3, 6, 6); }
+    }
+    g.globalAlpha = 1;
+    // Dusk dim for a nap, paper wipe for leaving.
+    if (this.dim > 0 || this.fade > 0) {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (this.dim > 0) { g.fillStyle = `rgba(34,48,77,${this.dim})`; g.fillRect(0, 0, cw, ch); }
+      if (this.fade > 0) {
+        g.fillStyle = '#E9DCC3'; g.fillRect(0, 0, cw * this.fade, ch);
+        g.strokeStyle = INK; g.lineWidth = 4; g.beginPath(); g.moveTo(cw * this.fade, 0); g.lineTo(cw * this.fade, ch); g.stroke();
+      }
+    }
   }
 
   private drawWorld(g: CanvasRenderingContext2D, t: number, dt: number, viewW: number, viewH: number): void {
@@ -291,7 +429,7 @@ export class Ranch {
     // Distant tree line.
     for (let x = 30; x < W; x += 140) if (x > x0 - 80 && x < x1 + 80 && (x / 140) % 3 !== 1) this.paperTree(g, x + ((x * 7) % 50), TOP - 6, 0.45, '#6FA46A');
     // Pasture.
-    g.fillStyle = '#7FB069'; g.fillRect(x0, TOP - 8, x1 - x0, D * TILT + 120);
+    g.fillStyle = '#7FB069'; g.fillRect(x0, TOP - 8, x1 - x0, 4000);
     // Worn dirt path from the barn past the trough to the training gate.
     g.strokeStyle = '#D9C095'; g.lineWidth = 46; g.lineCap = 'round'; g.lineJoin = 'round';
     g.beginPath(); g.moveTo(330, this.sy(170)); g.bezierCurveTo(500, this.sy(420), 1000, this.sy(430), 1290, this.sy(400));
@@ -316,7 +454,7 @@ export class Ranch {
     for (let i = 0; i < 3; i++) { const w = 30 + ((t * 20 + i * 40) % 80); g.globalAlpha = 1 - w / 110; g.beginPath(); g.ellipse(POND.x - 40 + i * 40, this.sy(POND.y) - 4 + i * 6, w * 0.6, w * 0.18, 0, 0, Math.PI * 2); g.stroke(); }
     g.globalAlpha = 1;
     // Lily pads.
-    g.fillStyle = '#4F8A5B'; for (const [lx, ly] of [[1660, 640], [1790, 690], [1730, 610]]) { g.beginPath(); g.ellipse(lx, this.sy(ly), 14, 6, 0, 0.3, Math.PI * 2); g.lineTo(lx, this.sy(ly)); g.fill(); }
+    g.fillStyle = '#4F8A5B'; for (const [lx, ly] of [[1680, 648], [1770, 680], [1735, 628]]) { g.beginPath(); g.ellipse(lx, this.sy(ly), 14, 6, 0, 0.3, Math.PI * 2); g.lineTo(lx, this.sy(ly)); g.fill(); }
     // Shadows on the ground (tree shade, under the horse).
     g.fillStyle = 'rgba(43,33,24,.16)';
     g.beginPath(); g.ellipse(1300, this.sy(300), 190, 70, 0, 0, Math.PI * 2); g.fill();
@@ -330,8 +468,7 @@ export class Ranch {
     const items: { y: number; draw: () => void }[] = [
       { y: BARN.y1, draw: () => this.barn(g) },
       { y: 245, draw: () => this.trough(g, 700, 245) },
-      { y: 120, draw: () => this.hay(g, 960, 120) },
-      { y: 140, draw: () => this.hay(g, 1030, 140) },
+      ...BALES.map((b) => ({ y: b.y, draw: () => this.hay(g, b.x, b.y) })),
       { y: 245, draw: () => this.bigTree(g, 1290, 245, t) },
       { y: 470, draw: () => this.gateSign(g, 2290, 470) },
       { y: 820, draw: () => this.paperTree(g, 140, this.sy(820), 1, '#5E9B5A') },
@@ -360,21 +497,27 @@ export class Ranch {
 
   private drawHorse(g: CanvasRenderingContext2D): void {
     const x = this.x; const y = this.sy(this.y);
-    const grazing = this.still > 3.5 && this.gait === 'stand' && this.facing !== 'back';
-    g.fillStyle = 'rgba(43,33,24,.22)'; g.beginPath(); g.ellipse(x, y, this.facing === 'left' || this.facing === 'right' || grazing ? 74 : 40, 12, 0, 0, Math.PI * 2); g.fill();
+    const lift = this.jump ? Math.sin(Math.PI * Math.min(1, this.jump.t / this.jump.dur)) * this.jump.h : 0;
+    const sc = this.scene;
+    const lying = sc?.kind === 'rest' && sc.stage === 'act' && sc.t > 0.35 && sc.t < 3.0;
+    const eating = sc?.kind === 'feed' && sc.stage === 'act';
+    const grazing = eating || (!this.jump && !sc && this.still > 3.5 && this.gait === 'stand' && this.facing !== 'back');
+    const shrink = 1 - lift / 160;
+    g.fillStyle = 'rgba(43,33,24,.22)'; g.beginPath(); g.ellipse(x, y, (this.facing === 'left' || this.facing === 'right' || grazing ? 74 : 40) * shrink, 12 * shrink, 0, 0, Math.PI * 2); g.fill();
     let img: HTMLImageElement | null | undefined;
     let w: number; let h: number; let ax: number; let ay: number;
-    const pose = this.gait === 'stand' ? 0 : this.phase;
+    const pose = this.jump ? 0.3 : this.gait === 'stand' ? 0 : this.phase; // legs tucked mid-leap
     if (this.facing === 'front' && !grazing) { img = this.front[Math.floor(pose * FB_FRAMES) % FB_FRAMES]; w = 200 * K; h = 270 * K; ax = 0.5; ay = 258 / 270; }
     else if (this.facing === 'back') { img = this.back[Math.floor(pose * FB_FRAMES) % FB_FRAMES]; w = 200 * K; h = 270 * K; ax = 0.5; ay = 258 / 270; }
     else {
-      img = grazing ? this.graze : this.side[Math.floor(pose * SIDE_FRAMES) % SIDE_FRAMES];
+      img = lying ? this.lieImg : grazing ? this.graze : this.side[Math.floor(pose * SIDE_FRAMES) % SIDE_FRAMES];
       w = SIDE_W; h = 290 * K; ax = 150 / 320; ay = 266 / 290;
     }
     if (!img) return;
-    const jig = this.paw > 0 ? Math.sin(this.paw * 30) * 1.5 : 0;
+    const jig = this.paw > 0 ? Math.sin(this.paw * 30) * 1.5 : eating ? Math.sin(performance.now() / 70) * 1.2 : 0;
     g.save();
-    g.translate(x + jig, y);
+    g.translate(x + jig, y - lift);
+    if (this.jump && (this.facing === 'left' || this.facing === 'right')) g.rotate((this.facing === 'right' ? -1 : 1) * Math.cos(Math.PI * this.jump.t / this.jump.dur) * 0.22);
     if (this.facing === 'left' || (grazing && this.facing === 'front' && this.heading > Math.PI / 2)) g.scale(-1, 1);
     g.drawImage(img, -w * ax, -h * ay, w, h);
     g.restore();

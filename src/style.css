@@ -694,3 +694,7 @@ button.st-nameplate.editable { cursor: pointer; }
 @media (min-width: 900px) { .rn-stage { height: min(100dvh, 760px); max-width: 1280px; margin: 0 auto; border-radius: 0 0 18px 18px; } }
 .rn-use[hidden], .rn-toast[hidden] { display: none; }
 @media (max-width: 600px) { .rn-use { bottom: calc(160px + env(safe-area-inset-bottom)); } }
+.rn-sheet { position: absolute; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(94%, 460px); max-height: 62%; overflow: auto; z-index: 3; animation: rn-up .25s ease-out; }
+.rn-sheet[hidden] { display: none; }
+.rn-sheet .panel { margin: 0; box-shadow: 5px 5px 0 var(--ink); }
+@keyframes rn-up { from { transform: translate(-50%, 40px); opacity: 0; } }
