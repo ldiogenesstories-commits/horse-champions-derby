@@ -37,7 +37,7 @@ const INK = '#2B2118';
 let uid = 0;
 
 /** An SVG <pattern> for the silks, plus the fill to use. Ids are unique per call. */
-function silksDefs(j: Jockey): { defs: string; fill: string } {
+export function silksDefs(j: Jockey): { defs: string; fill: string } {
   const id = `silk${++uid}`;
   const a = j.primary;
   const b = j.secondary;

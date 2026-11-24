@@ -9,6 +9,7 @@ import { trackPoint } from '../sim/track';
 import { DEFAULT_LOOK, horseBodySVG } from './horseBody';
 import { DEFAULT_JOCKEY, riderSVG, type Jockey, type SilksPattern } from './jockey';
 import { portraitSVG } from './portrait';
+import { horseFrontSVG } from './horseFront';
 
 const FRAMES = 8; // gallop poses per horse
 const STRIDE_M = 7; // metres per full gallop cycle
@@ -16,7 +17,11 @@ const HORSE_M = 3.4; // how many track metres one horse sprite spans
 const SPRITE_W = 300; // px each pose is rendered at
 const PATTERNS: SilksPattern[] = ['hoops', 'stripes', 'diamonds', 'stars', 'chevron', 'halves', 'sash', 'solid'];
 
-type Shot = 'track' | 'aerial';
+type Shot = 'track' | 'aerial' | 'close' | 'rail' | 'headon' | 'winner';
+const SHOT_LABEL: Record<Shot, string> = { track: 'TRACKSIDE', aerial: 'AERIAL VIEW', close: 'CLOSE-UP', rail: 'RAIL CAM', headon: 'HEAD-ON', winner: 'WINNER CAM' };
+// The director's rotation between big moments (seconds of race time per shot).
+const PLAYLIST: [Shot, number][] = [['track', 6], ['close', 4.5], ['track', 4], ['rail', 4], ['headon', 5], ['track', 5], ['close', 4], ['aerial', 4.5]];
+const FRONT_FRAMES = 6;
 
 interface Cut { until: number; html: string }
 
@@ -39,13 +44,19 @@ export class Broadcast {
   private ui: HTMLElement;
   private race: Race | null = null;
   private frames = new Map<string, HTMLImageElement[]>();
+  private fronts = new Map<string, HTMLImageElement[]>();
+  private pl = 0;
+  private focus = '';
+  private focusTurn = 0;
+  private railAt = 0;
+  private finale = false;
+  private camLane = 3;
   private names = new Map<string, string>(); // horse id -> jockey name (family players)
   private raf = 0;
   private last = 0;
   private cam = 0;
   private shot: Shot = 'aerial';
   private shotUntil = 0;
-  private nextAerial = 16;
   private evIndex = 0;
   private cut: Cut | null = null;
   private cutCooldown = 0;
@@ -75,6 +86,8 @@ export class Broadcast {
       const imgs = await Promise.all(Array.from({ length: FRAMES }, (_, f) =>
         loadImage(horseBodySVG(h.def, h.def.look ?? DEFAULT_LOOK, { pose: f / FRAMES, rider: riderSVG(j) }).replace('<svg ', `<svg width="${SPRITE_W}" height="${Math.round(SPRITE_W * 290 / 320)}" `))));
       this.frames.set(h.def.id, imgs);
+      this.fronts.set(h.def.id, await Promise.all(Array.from({ length: FRONT_FRAMES }, (_, f) =>
+        loadImage(horseFrontSVG(h.def, h.def.look ?? DEFAULT_LOOK, j, f / FRONT_FRAMES).replace('<svg ', '<svg width="200" height="270" ')))));
     });
     await Promise.all(jobs);
     // Mini-map bounds from the oval itself.
@@ -89,7 +102,12 @@ export class Broadcast {
     this.evIndex = 0;
     this.shot = 'aerial';
     this.shotUntil = 3; // the break, from above
-    this.nextAerial = 18;
+    this.pl = 0;
+    this.finale = false;
+    this.focusTurn = 0;
+    this.leaderCutAt = -99;
+    this.lastLeaderCut = -1;
+    this.cutCooldown = 0;
     this.onShot('aerial');
     this.ui.innerHTML = `
       <div class="bc-bug"><b>HORSE CHAMPIONS DERBY</b><span id="bc-race"></span></div>
@@ -97,6 +115,8 @@ export class Broadcast {
       <div class="bc-count" id="bc-count" hidden></div>
       <div class="bc-leader" id="bc-leader"></div>
       <div class="bc-cut" id="bc-cut" hidden></div>`;
+    this.shot = 'track';
+    this.setShot('aerial', 3);
     this.last = performance.now();
     const loop = (now: number) => { this.frame(now); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
@@ -115,21 +135,43 @@ export class Broadcast {
 
   // ---------- director ----------
   private setShot(s: Shot, until: number): void {
-    if (s !== this.shot) { this.shot = s; this.onShot(s); }
+    if (s !== this.shot) { this.shot = s; this.onShot(s); this.dust = []; }
     this.shotUntil = until;
-    this.canvas.style.display = s === 'track' ? 'block' : 'none';
+    this.canvas.style.display = s === 'aerial' ? 'none' : 'block';
     const label = this.ui.querySelector('#bc-shot') as HTMLElement | null;
-    if (label) label.textContent = s === 'aerial' ? 'AERIAL VIEW' : 'TRACKSIDE';
+    if (!label) return;
+    const f = this.race?.horses.find((x) => x.def.id === this.focus);
+    label.textContent = (s === 'close' || s === 'winner') && f ? `${SHOT_LABEL[s]} · No. ${f.def.number}` : SHOT_LABEL[s];
+  }
+
+  /** Who the close-up follows: take turns between family players' horses and the leader. */
+  private pickFocus(r: Race): string {
+    const people = r.horses.filter((x) => this.names.has(x.def.id) && !x.finished);
+    const lead = r.standings()[0];
+    const pool = [lead, ...people];
+    const pick = pool[this.focusTurn++ % pool.length] ?? lead;
+    return pick.def.id;
   }
 
   private direct(r: Race): void {
     const t = r.t;
-    const left = r.distance - Math.max(...r.horses.map((h) => h.dist));
-    // Stay trackside for the drive home; otherwise check in from above now and then.
-    if (this.shot === 'aerial' && t >= this.shotUntil) this.setShot('track', Infinity);
-    else if (this.shot === 'track' && t >= this.nextAerial && left > 450 && !r.finished) {
-      this.setShot('aerial', t + 4.5);
-      this.nextAerial = t + 20;
+    const lead = Math.max(...r.horses.map((h) => h.dist));
+    const left = r.distance - lead;
+    if (r.finished && this.shot !== 'winner') {
+      // Wire-to-wire done: hold a close-up on the winner.
+      this.focus = r.standings()[0].def.id;
+      this.setShot('winner', Infinity);
+    } else if (!r.finished && !this.finale && left < 240 && t > 4) {
+      // The drive home: head-on as they bear down on us, then side-on to the wire.
+      this.finale = true;
+      this.setShot('headon', Infinity);
+    } else if (this.finale && this.shot === 'headon' && left < 75) {
+      this.setShot('track', Infinity);
+    } else if (!this.finale && !r.finished && t >= this.shotUntil) {
+      const [shot, len] = PLAYLIST[this.pl++ % PLAYLIST.length];
+      if (shot === 'close') this.focus = this.pickFocus(r);
+      if (shot === 'rail') this.railAt = lead + 13; // the camera waits by the rail just ahead of the leader
+      this.setShot(shot, t + len);
     }
     // Comic-panel cut-ins on big moments.
     while (this.evIndex < r.events.length) {
@@ -170,8 +212,7 @@ export class Broadcast {
     this.last = now;
     this.direct(r);
     this.graphics(r);
-    if (this.shot !== 'track') return;
-
+    if (this.shot === 'aerial') return;
     const c = this.canvas;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = c.clientWidth;
@@ -179,40 +220,69 @@ export class Broadcast {
     if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
     const g = this.ctx;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (this.shot === 'headon') this.drawHeadOn(g, r, w, h, dt);
+    else this.drawSide(g, r, w, h, dt);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (this.shot !== 'winner') this.minimap(g, r, w, h);
+  }
 
+  /** Side-on shots: wide trackside, close-up on one horse, fixed rail cam, winner cam. */
+  private drawSide(g: CanvasRenderingContext2D, r: Race, w: number, h: number, dt: number): void {
+    const shot = this.shot;
     const spriteH = h * 0.3;
     const spriteW = spriteH * 320 / 290;
     const ppm = spriteW / HORSE_M;
-    // Camera follows the front of the field, keeping the leader at ~68% across.
-    const lead = Math.max(...r.horses.map((x) => x.dist));
-    // The front-runner's distance never jumps, so the camera can ride it exactly (no lag);
-    // ease only the framing, which widens as the race nears the wire.
-    const frame = r.finished ? 0.12 : 0.24;
-    this.cam = lead - (w * frame) / ppm;
-    const sx = (d: number, depth: number) => w / 2 + (d - this.cam) * ppm * depth;
-
-    // Sky and paper hills.
-    const sky = g.createLinearGradient(0, 0, 0, h * 0.45);
-    sky.addColorStop(0, '#8FBFD3'); sky.addColorStop(1, '#E3EFF2');
-    g.fillStyle = sky; g.fillRect(0, 0, w, h * 0.45);
-    this.hills(g, w, h, -this.cam * ppm * 0.08);
-    this.stands(g, w, h, -this.cam * ppm * 0.3);
-    // Infield turf strip, far rail, track.
     const trackTop = h * 0.5;
     const trackBot = h * 0.93;
-    g.fillStyle = '#4F8A5B'; g.fillRect(0, h * 0.42, w, trackTop - h * 0.42);
-    g.fillStyle = '#C9A27A'; g.fillRect(0, trackTop, w, trackBot - trackTop);
-    // Harrow lines in the dirt, moving with the ground.
+    const laneY = (lane: number) => trackTop + (trackBot - trackTop) * (0.32 + 0.085 * Math.min(7, lane));
+    const depthOf = (lane: number) => 0.88 + 0.035 * Math.min(7, lane);
+    const lead = Math.max(...r.horses.map((x) => x.dist));
+    const focus = r.horses.find((x) => x.def.id === this.focus) ?? r.standings()[0];
+    let zoom = 1;
+    let pivotX = w / 2;
+    let pivotY = h / 2;
+    if (shot === 'track') this.cam = lead - (w * (r.finished ? 0.12 : 0.24)) / ppm;
+    else if (shot === 'rail') { this.cam = this.railAt; zoom = 1.45; pivotY = h * 0.78; }
+    else {
+      // Close-up / winner cam: lock onto one horse, telephoto.
+      zoom = shot === 'winner' ? 2.4 : 2.1;
+      this.cam = focus.dist;
+      pivotX = w / 2;
+      pivotY = laneY(focus.lane) - spriteH * depthOf(focus.lane) * 0.42;
+    }
+    if (zoom !== 1) {
+      // Scale the whole scene about the pivot, then put the pivot at the frame's centre line.
+      g.translate(w / 2, shot === 'rail' ? pivotY : h * 0.55);
+      g.scale(zoom, zoom);
+      g.translate(-pivotX, -pivotY);
+    }
+    const sx = (d: number, depth: number) => w / 2 + (d - this.cam) * ppm * depth;
+    // Draw a little past the frame edges so zoomed shots never show a seam.
+    const L = -w; const R = 2 * w;
+    const sky = g.createLinearGradient(0, -h, 0, h * 0.45);
+    sky.addColorStop(0, '#6FA8C2'); sky.addColorStop(1, '#E3EFF2');
+    g.fillStyle = sky; g.fillRect(L, -h, R - L, h * 1.45);
+    this.hills(g, L, R, h, -this.cam * ppm * 0.08);
+    this.stands(g, L, R, h, -this.cam * ppm * 0.3);
+    g.fillStyle = '#4F8A5B'; g.fillRect(L, h * 0.42, R - L, trackTop - h * 0.42);
+    g.fillStyle = '#C9A27A'; g.fillRect(L, trackTop, R - L, trackBot - trackTop);
     g.strokeStyle = 'rgba(43,33,24,0.08)'; g.lineWidth = 2;
     const stripe = 2.5 * ppm;
     const off = (-(this.cam * ppm)) % stripe;
-    for (let x = off - stripe; x < w + stripe; x += stripe) { g.beginPath(); g.moveTo(x, trackTop); g.lineTo(x - 30, trackBot); g.stroke(); }
-    this.rail(g, w, trackTop, 0.82, ppm, 18);
-    this.poles(g, r, w, trackTop, ppm, sx);
+    for (let x = L + off - stripe; x < R + stripe; x += stripe) { g.beginPath(); g.moveTo(x, trackTop); g.lineTo(x - 30, trackBot); g.stroke(); }
+    if (shot === 'close' || shot === 'winner') {
+      // Speed lines streak past behind the horse.
+      g.strokeStyle = 'rgba(255,251,242,0.55)'; g.lineWidth = 2;
+      const k = (performance.now() / 4) % 300;
+      for (let i = 0; i < 14; i++) {
+        const y = trackTop - 60 + ((i * 53) % 140);
+        const x = R - ((k * (1 + (i % 3) * 0.5) + i * 97) % (R - L));
+        if (!r.finished || shot === 'close') { g.beginPath(); g.moveTo(x, y); g.lineTo(x + 70 + (i % 4) * 25, y); g.stroke(); }
+      }
+    }
+    this.rail(g, L, R, trackTop, 0.82, ppm, 18);
+    this.poles(g, r, L, R, trackTop, sx);
 
-    // Horses, far lane first; feet on their lane's ground line.
-    const laneY = (lane: number) => trackTop + (trackBot - trackTop) * (0.32 + 0.085 * Math.min(7, lane));
-    const depthOf = (lane: number) => 0.88 + 0.035 * Math.min(7, lane);
     const drawn = [...r.horses].sort((a, b) => a.lane - b.lane);
     for (const hs of drawn) {
       const imgs = this.frames.get(hs.def.id);
@@ -222,13 +292,11 @@ export class Broadcast {
       const y = laneY(hs.lane);
       const sw = spriteW * depth;
       const sh = spriteH * depth;
-      if (x < -sw || x > w + sw) continue;
-      const moving = hs.speed > 0.5 && !(hs.finished && hs.speed < 1);
+      if (x < L - sw || x > R + sw) continue;
+      const moving = hs.speed > 0.5;
       const pose = moving ? Math.floor(((hs.dist / STRIDE_M) % 1) * FRAMES) : 0;
-      // Hoof dust.
       if (moving && Math.random() < dt * 14) this.dust.push({ x: x - sw * 0.35, y: y - 4, r: 4 + Math.random() * 6, life: 0.6 });
       g.drawImage(imgs[pose], x - sw / 2, y - sh * 0.93, sw, sh);
-      // Saddle-cloth number (and a family player's name tag).
       const bx = x - sw * 0.06;
       const by = y - sh * 0.6;
       g.fillStyle = hs.def.color; g.strokeStyle = '#2B2118'; g.lineWidth = 2;
@@ -237,22 +305,123 @@ export class Broadcast {
       g.font = `900 ${Math.round(12 * depth)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(String(hs.def.number), bx, by + 0.5);
       const tag = this.names.get(hs.def.id);
-      if (tag) this.nameTag(g, tag, x + sw * 0.1, y - sh * 1.02, depth);
+      if (tag && zoom === 1) this.nameTag(g, tag, x + sw * 0.1, y - sh * 1.02, depth);
     }
-    // Dust puffs.
     for (const d of this.dust) { d.life -= dt; d.x -= 30 * dt; d.r += 14 * dt; }
     this.dust = this.dust.filter((d) => d.life > 0);
     for (const d of this.dust) { g.fillStyle = `rgba(169,143,110,${Math.max(0, d.life)})`; g.beginPath(); g.arc(d.x, d.y, d.r, 0, Math.PI * 2); g.fill(); }
-    // Near rail in the foreground.
-    this.rail(g, w, trackBot + 4, 1.25, ppm, 26);
-    g.fillStyle = '#4F8A5B'; g.fillRect(0, trackBot + 10, w, h - trackBot - 10);
-    this.minimap(g, r, w, h);
+    this.rail(g, L, R, trackBot + 4, 1.25, ppm, 26);
+    g.fillStyle = '#4F8A5B'; g.fillRect(L, trackBot + 10, R - L, h * 2);
+    // When the rail-cam has seen them all go by, cut away early.
+    if (shot === 'rail' && r.horses.every((x) => sx(x.dist, 1) > w * 1.25)) this.shotUntil = 0;
   }
 
-  private hills(g: CanvasRenderingContext2D, w: number, h: number, off: number): void {
+  /** Head-on dolly: the camera rolls backwards ahead of the leader, the field charging at us. */
+  private drawHeadOn(g: CanvasRenderingContext2D, r: Race, w: number, h: number, dt: number): void {
+    const lead = Math.max(...r.horses.map((x) => x.dist));
+    const camD = Math.min(lead + 15, r.distance + 6);
+    const f = h * 3.1;
+    const horizon = h * 0.34;
+    const camH = 1.7;
+    const LW = 1.25; // a touch wider than real lanes so the field reads
+    // Pan sideways to keep the leader in front of the lens.
+    const leader = r.horses.reduce((a, b) => (b.dist > a.dist ? b : a));
+    const want = Math.max(0.6, Math.min(6.5, leader.lane + 0.6));
+    this.camLane = this.dust.length === 0 ? want : this.camLane + (want - this.camLane) * Math.min(1, dt * 1.5);
+    const proj = (dist: number, lane: number) => {
+      const z = Math.max(0.5, camD - dist);
+      return { x: w / 2 + (lane - this.camLane) * LW * f / z, y: horizon + camH * f / z, s: f / z, z };
+    };
+    // Sky, far hills and the grandstand off to the outside.
+    const sky = g.createLinearGradient(0, 0, 0, horizon);
+    sky.addColorStop(0, '#6FA8C2'); sky.addColorStop(1, '#E3EFF2');
+    g.fillStyle = sky; g.fillRect(0, 0, w, horizon);
+    g.fillStyle = '#A9C8A0';
+    g.beginPath(); g.moveTo(0, horizon); g.quadraticCurveTo(w * 0.25, horizon - h * 0.1, w * 0.5, horizon - h * 0.02); g.quadraticCurveTo(w * 0.75, horizon - h * 0.12, w, horizon); g.closePath(); g.fill();
+    // Ground: infield (inside the inner rail), dirt, then the apron by the stands.
+    g.fillStyle = '#4F8A5B'; g.fillRect(0, horizon, w, h - horizon);
+    const far = 400;
+    const quad = (l1: number, l2: number, color: string) => {
+      const a = proj(camD - far, l1); const b = proj(camD - far, l2); const c = proj(camD - 1.2, l2); const d = proj(camD - 1.2, l1);
+      g.fillStyle = color; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(d.x, d.y); g.closePath(); g.fill();
+    };
+    quad(-0.8, 9.5, '#C9A27A');
+    quad(9.5, 30, '#E9DCC0');
+    // Grandstand wall receding toward the vanishing point, with the crowd.
+    {
+      const a = proj(camD - far, 12); const d = proj(camD - 2, 12);
+      const top = (p: { y: number; s: number }) => p.y - 9 * p.s;
+      g.fillStyle = '#E9DCC0'; g.strokeStyle = '#2B2118'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(a.x, top(a)); g.lineTo(d.x, top(d)); g.lineTo(d.x, d.y); g.closePath(); g.fill(); g.stroke();
+      const crowd = ['#C8452D', '#2F5D9E', '#E2A93B', '#FFFBF2', '#3E8E8A', '#7A3E8E', '#E48AA6'];
+      for (let k = 3; k < 120; k += 1.6) {
+        const p = proj(camD - k, 12);
+        if (p.x > w + 50) continue;
+        for (let row = 0; row < 3; row++) {
+          g.fillStyle = crowd[(Math.floor(k * 3) + row * 2) % crowd.length];
+          g.beginPath(); g.arc(p.x, p.y - (2.2 + row * 2.3) * p.s, Math.max(1, 0.42 * p.s), 0, Math.PI * 2); g.fill();
+        }
+      }
+    }
+    // Harrow lines and rails with posts rushing toward the camera.
+    const posts = (lane: number, hgt: number) => {
+      const p0 = proj(camD - far, lane); const p1 = proj(camD - 1.2, lane);
+      const t0 = { x: p0.x, y: p0.y - hgt * p0.s }; const t1 = { x: p1.x, y: p1.y - hgt * p1.s };
+      g.strokeStyle = '#FFFBF2'; g.lineWidth = 1; 
+      const first = Math.ceil((camD - 120) / 4) * 4;
+      for (let d = first; d < camD - 1.5; d += 4) {
+        const p = proj(d, lane);
+        g.fillStyle = '#FFFBF2'; g.fillRect(p.x - 0.06 * p.s, p.y - hgt * p.s, 0.12 * p.s, hgt * p.s);
+      }
+      g.strokeStyle = '#2B2118'; g.lineWidth = 1.5;
+      g.fillStyle = '#FFFBF2';
+      g.beginPath(); g.moveTo(t0.x, t0.y); g.lineTo(t1.x, t1.y); g.lineTo(t1.x, t1.y + 0.12 * p1.s); g.lineTo(t0.x, t0.y + 1); g.closePath(); g.fill(); g.stroke();
+    };
+    g.strokeStyle = 'rgba(43,33,24,0.1)'; g.lineWidth = 2;
+    for (let d = Math.ceil((camD - 150) / 3) * 3; d < camD - 1.5; d += 3) {
+      const a = proj(d, -0.8); const b = proj(d, 9.5);
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    }
+    // Finish line across the track when it's in view.
+    if (r.distance < camD - 1.2) {
+      const a = proj(r.distance, -0.8); const b = proj(r.distance, 9.5);
+      g.strokeStyle = 'rgba(255,251,242,0.9)'; g.lineWidth = Math.max(2, 0.25 * a.s);
+      g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    }
+    posts(-0.8, 1.1);
+    posts(9.5, 1.1);
+    // The field, farthest first.
+    const order = [...r.horses].sort((a, b) => a.dist - b.dist);
+    for (const hs of order) {
+      const imgs = this.fronts.get(hs.def.id);
+      if (!imgs) continue;
+      const p = proj(hs.dist, hs.lane);
+      if (p.z < 2.5) continue;
+      const hgt = 2.7 * p.s;
+      const wid = hgt * 200 / 270;
+      const moving = hs.speed > 0.5;
+      const pose = moving ? Math.floor(((hs.dist / STRIDE_M) % 1) * FRONT_FRAMES) : 0;
+      if (moving && Math.random() < dt * 10) this.dust.push({ x: p.x + (Math.random() - 0.5) * wid * 0.6, y: p.y - 0.1 * p.s, r: 0.2 * p.s, life: 0.5 });
+      g.drawImage(imgs[pose], p.x - wid / 2, p.y - hgt * 0.96, wid, hgt);
+      const by = p.y - hgt * 0.66;
+      const br = Math.max(6, 0.19 * p.s);
+      g.fillStyle = hs.def.color; g.strokeStyle = '#2B2118'; g.lineWidth = 2;
+      g.beginPath(); g.arc(p.x - wid * 0.36, by, br, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = isLight(hs.def.color) ? '#2B2118' : '#FFFBF2';
+      g.font = `900 ${Math.round(br * 1.1)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(hs.def.number), p.x - wid * 0.36, by + 0.5);
+      const tag = this.names.get(hs.def.id);
+      if (tag && p.z < 45) this.nameTag(g, tag, p.x, p.y - hgt * 1.04, Math.min(1.4, Math.max(0.7, p.s / 40)));
+    }
+    for (const d of this.dust) { d.life -= dt; d.y -= 8 * dt; d.r *= 1 + dt * 1.5; }
+    this.dust = this.dust.filter((d) => d.life > 0);
+    for (const d of this.dust) { g.fillStyle = `rgba(169,143,110,${Math.max(0, d.life * 0.9)})`; g.beginPath(); g.arc(d.x, d.y, d.r, 0, Math.PI * 2); g.fill(); }
+  }
+
+  private hills(g: CanvasRenderingContext2D, L: number, R: number, h: number, off: number): void {
     const tile = 520;
     g.fillStyle = '#A9C8A0';
-    for (let x = (off % tile) - tile; x < w + tile; x += tile) {
+    for (let x = L + (off % tile) - tile; x < R + tile; x += tile) {
       g.beginPath(); g.moveTo(x, h * 0.42);
       g.quadraticCurveTo(x + 130, h * 0.22, x + 260, h * 0.36);
       g.quadraticCurveTo(x + 390, h * 0.26, x + 520, h * 0.42);
@@ -260,13 +429,13 @@ export class Broadcast {
     }
   }
 
-  private stands(g: CanvasRenderingContext2D, w: number, h: number, off: number): void {
+  private stands(g: CanvasRenderingContext2D, L: number, R: number, h: number, off: number): void {
     // A paper grandstand with a cheering crowd (dots) and bunting.
     const tile = 640;
     const top = h * 0.24;
     const bot = h * 0.42;
     const crowd = ['#C8452D', '#2F5D9E', '#E2A93B', '#FFFBF2', '#3E8E8A', '#7A3E8E', '#E48AA6'];
-    for (let x = (off % tile) - tile; x < w + tile; x += tile) {
+    for (let x = L + (off % tile) - tile; x < R + tile; x += tile) {
       g.fillStyle = '#E9DCC0'; g.fillRect(x + 40, top, 420, bot - top);
       g.fillStyle = '#C8452D'; g.beginPath(); g.moveTo(x + 30, top); g.lineTo(x + 250, top - h * 0.07); g.lineTo(x + 470, top); g.closePath(); g.fill();
       g.strokeStyle = '#2B2118'; g.lineWidth = 2; g.strokeRect(x + 40, top, 420, bot - top);
@@ -284,20 +453,20 @@ export class Broadcast {
     }
   }
 
-  private rail(g: CanvasRenderingContext2D, w: number, y: number, depth: number, ppm: number, postH: number): void {
+  private rail(g: CanvasRenderingContext2D, L: number, R: number, y: number, depth: number, ppm: number, postH: number): void {
     const gap = 4 * ppm * depth;
     const off = (-(this.cam * ppm * depth)) % gap;
     g.fillStyle = '#FFFBF2'; g.strokeStyle = '#2B2118'; g.lineWidth = 1.5;
-    for (let x = off - gap; x < w + gap; x += gap) { g.fillRect(x, y - postH, 5 * depth, postH); g.strokeRect(x, y - postH, 5 * depth, postH); }
-    g.fillRect(0, y - postH, w, 6 * depth); g.beginPath(); g.moveTo(0, y - postH); g.lineTo(w, y - postH); g.stroke();
+    for (let x = L + off - gap; x < R + gap; x += gap) { g.fillRect(x, y - postH, 5 * depth, postH); g.strokeRect(x, y - postH, 5 * depth, postH); }
+    g.fillRect(L, y - postH, R - L, 6 * depth); g.beginPath(); g.moveTo(L, y - postH); g.lineTo(R, y - postH); g.stroke();
   }
 
-  private poles(g: CanvasRenderingContext2D, r: Race, w: number, y: number, ppm: number, sx: (d: number, depth: number) => number): void {
+  private poles(g: CanvasRenderingContext2D, r: Race, L: number, R: number, y: number, sx: (d: number, depth: number) => number): void {
     // Distance poles every 200 m (remaining) and the finish post.
     for (let left = 0; left <= r.distance; left += 200) {
       const d = r.distance - left;
       const x = sx(d, 0.82);
-      if (x < -60 || x > w + 60) continue;
+      if (x < L - 60 || x > R + 60) continue;
       if (left === 0) {
         for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#FFFBF2' : '#C8452D'; g.fillRect(x - 5, y - 120 + i * 15, 10, 15); }
         g.strokeStyle = '#2B2118'; g.lineWidth = 2; g.strokeRect(x - 5, y - 120, 10, 120);
@@ -311,7 +480,6 @@ export class Broadcast {
         g.fillStyle = '#2B2118'; g.font = '900 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(left), x, y - 78);
       }
     }
-    void ppm;
   }
 
   private nameTag(g: CanvasRenderingContext2D, text: string, x: number, y: number, depth: number): void {
