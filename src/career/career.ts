@@ -4,6 +4,7 @@ import qrcode from 'qrcode-generator';
 import type { HorseDef } from '../sim/types';
 import { horseBodySVG, type Look } from '../game/horseBody';
 import { riderSVG, silksBadge, type Jockey } from '../game/jockey';
+import { cardUrl } from '../net/cloud';
 
 export const CAREER_RACES = 20;
 
@@ -28,6 +29,10 @@ export interface RetiredCard {
   trust: number;
   retiredOn: string; // ISO date
   jockey?: Jockey;
+  /** Uploaded so other phones can scan it in. */
+  published?: boolean;
+  /** Scanned in from someone else's card (not raised in this stable). */
+  guest?: boolean;
 }
 
 export function careerPoints(rec: { w: number; p: number; s: number }, log: CareerLog): number {
@@ -71,11 +76,9 @@ export function qrSVG(text: string, px = 112): string {
   return `<svg viewBox="-2 -2 ${n + 4} ${n + 4}" width="${px}" height="${px}" shape-rendering="crispEdges" role="img" aria-label="QR code"><rect x="-2" y="-2" width="${n + 4}" height="${n + 4}" fill="#fff"/><path d="${d}" fill="#2B2118"/></svg>`;
 }
 
-/** What the QR carries: enough to identify and rebuild the card later. */
+/** What the QR carries: a link that opens the game on this card, on any phone. */
 export function qrPayload(c: RetiredCard): string {
-  const s = c.horse.stats;
-  return ['HCD1', c.code, c.horse.name, `${c.record.w}-${c.record.p}-${c.record.s}`, c.rank,
-    [s.speed, s.stamina, s.accel, s.guts, s.gate, s.agility].map(Math.round).join('.'), c.retiredOn].join('|');
+  return cardUrl(c.code);
 }
 
 const STAT_ROWS: [keyof HorseDef['stats'], string][] = [
@@ -86,7 +89,7 @@ export function cardHTML(c: RetiredCard): string {
   const s = c.horse.stats;
   const date = new Date(c.retiredOn).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   return `<article class="hcard" style="--silk:${c.horse.color}">
-    <header class="hcard-top"><span class="hcard-brand">Horse Champions Derby</span><span class="hcard-rank">${c.rank}</span></header>
+    <header class="hcard-top"><span class="hcard-brand">Horse Champions Derby</span><span class="hcard-rank">${c.guest ? 'Guest · ' : ''}${c.rank}</span></header>
     <div class="hcard-art">${horseBodySVG(c.horse, c.look, { shine: true, rider: c.jockey ? riderSVG(c.jockey) : undefined })}</div>
     <h3 class="hcard-name">${c.horse.name}</h3>
     ${c.horse.sire ? `<div class="hcard-jockey">By ${c.horse.sire} out of ${c.horse.dam}${c.horse.generation ? ` · Gen ${c.horse.generation}` : ''}</div>` : ''}

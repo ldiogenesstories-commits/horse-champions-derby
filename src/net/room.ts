@@ -2,8 +2,8 @@
 // Two interchangeable transports:
 //   - Supabase Realtime (the real thing, across phones and the TV)
 //   - Local (BroadcastChannel) for testing several tabs on one computer, no internet
-import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
-import { SUPABASE_KEY, SUPABASE_URL } from './config';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { LOCAL_MODE, supabase } from './cloud';
 
 export interface Member {
   id: string; // this device's id
@@ -29,7 +29,6 @@ export interface Room {
   leave(): void;
 }
 
-const LOCAL_MODE = location.protocol === 'file:' || new URLSearchParams(location.search).has('local');
 
 export const deviceId = (() => {
   try {
@@ -56,7 +55,7 @@ export function openRoom(code: string, onStatus: (s: 'connecting' | 'ok' | 'erro
 }
 
 function supabaseRoom(code: string, onStatus: (s: 'connecting' | 'ok' | 'error', detail?: string) => void): Room {
-  const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { realtime: { params: { eventsPerSecond: 40 } } });
+  const sb = supabase();
   const ch: RealtimeChannel = sb.channel(`hcd:${code}`, { config: { broadcast: { self: false, ack: false }, presence: { key: deviceId } } });
   const msgCbs: ((m: Msg) => void)[] = [];
   const memCbs: ((l: Member[]) => void)[] = [];

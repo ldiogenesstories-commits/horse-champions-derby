@@ -31,6 +31,8 @@ import { CRITTER_SVG, FRIENDS, rosetteSVG, webSVG, type FriendId } from './game/
 import { DEFAULT_JOCKEY, silksBadge, type Jockey } from './game/jockey';
 import { runJockeyRoom } from './training/jockeyRoom';
 import { Broadcast } from './game/broadcast';
+import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup } from './net/cloud';
+import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
 // ---------- State ----------
@@ -685,8 +687,9 @@ function retire(): void {
       jockey: { ...jockey },
     };
     hall.unshift(retiredCard);
-    try { localStorage.setItem(HALL_KEY, JSON.stringify(hall)); } catch { /* keep in memory */ }
+    saveHall();
     save();
+    void shareCards();
   }
   const c = retiredCard;
   $('ret-title').textContent = `${c.horse.name} retires a ${c.rank}!`;
@@ -731,11 +734,50 @@ function openBreeding(preselect?: string): void {
   });
 }
 
+function saveHall(): void {
+  try { localStorage.setItem(HALL_KEY, JSON.stringify(hall)); scheduleBackup(); } catch { /* keep in memory */ }
+}
+
+/** Upload this stable's own cards (retrying any that didn't make it while offline). */
+async function shareCards(): Promise<void> {
+  let changed = false;
+  for (const c of hall) {
+    if (c.published || c.guest) continue;
+    try { const { published: _p, guest: _g, ...pub } = c; await publishCard(c.code, pub); c.published = true; changed = true; } catch { break; }
+  }
+  if (changed) saveHall();
+}
+
+let foundCard: RetiredCard | null = null;
+async function findCard(input: string): Promise<void> {
+  const msg = $('card-msg');
+  $('card-add').hidden = true;
+  $('card-preview').innerHTML = '';
+  foundCard = null;
+  const code = cleanCardCode(input);
+  if (!code) { msg.textContent = 'That doesn\'t look like a card code. It reads like HCD-7KQ2-M9XA.'; return; }
+  ($('card-code') as HTMLInputElement).value = code;
+  const mine = hall.find((c) => c.code === code);
+  if (mine) { msg.textContent = `${mine.horse.name} is already in your Hall of Fame.`; return; }
+  msg.textContent = 'Looking up the card…';
+  try {
+    const c = await fetchCard<RetiredCard>(code);
+    if (!c?.horse) { msg.textContent = `No card found for ${code}. Check the code, or ask its owner to open their Hall of Fame once while online.`; return; }
+    foundCard = { ...c, code, guest: true, published: true };
+    msg.textContent = `Found ${c.horse.name}${c.jockey?.name && c.jockey.name !== 'You' ? `, raised by ${c.jockey.name}` : ''}.`;
+    $('card-preview').innerHTML = cardHTML(foundCard);
+    $('card-add').hidden = false;
+  } catch {
+    msg.textContent = 'Couldn\'t reach the card library. Check the internet connection and try again.';
+  }
+}
+
 function renderHall(): void {
+  void shareCards();
   $('hall-breed').hidden = !hall.length;
   $('hall-grid').innerHTML = hall.length
     ? hall.map((c) => cardHTML(c)).join('')
-    : '<p class="muted">No retired horses yet. Finish a 20-race career to add one.</p>';
+    : '<p class="muted">No retired horses yet. Finish a 20-race career, or add a card from family and friends.</p>';
   show('hall');
 }
 
@@ -752,7 +794,7 @@ function openJockeyRoom(): void {
   show('jockey');
   runJockeyRoom($('jockey-root'), player, jockey, (j) => {
     jockey = j;
-    try { localStorage.setItem(JOCKEY_KEY, JSON.stringify(jockey)); } catch { /* memory only */ }
+    try { localStorage.setItem(JOCKEY_KEY, JSON.stringify(jockey)); scheduleBackup(); } catch { /* memory only */ }
     applyJockey();
   }, () => show('stable'));
 }
@@ -774,7 +816,7 @@ function unlockFriend(id: FriendId): void {
   newFriends.push(id);
   const f = FRIENDS.find((x) => x.id === id)!;
   growthLog.push({ text: `New barn friend: ${f.name} the ${f.kind} moved in!`, cls: 'big' });
-  try { localStorage.setItem(BARN_KEY, JSON.stringify({ friends })); } catch { /* memory only */ }
+  try { localStorage.setItem(BARN_KEY, JSON.stringify({ friends })); scheduleBackup(); } catch { /* memory only */ }
 }
 
 function checkFriends(): void {
@@ -924,8 +966,8 @@ function renderStable(): void {
   $('st-actions').innerHTML = Array.from({ length: ACTIONS_PER_DAY }, (_, i) => `<i class="${i < actionsLeft ? 'on' : ''}"></i>`).join('');
   $('st-actions-num').textContent = actionsLeft ? `${actionsLeft} left` : 'Race next';
   for (const id of ['go-train', 'go-rest', 'go-feed']) $(id).classList.toggle('spent', actionsLeft === 0);
-  $('go-hall').hidden = hall.length === 0;
-  $('hall-count').textContent = `${hall.length} retired`;
+  const guests = hall.filter((c) => c.guest).length;
+  $('hall-count').textContent = hall.length ? `${hall.length - guests} retired${guests ? ` · ${guests} guest${guests > 1 ? 's' : ''}` : ''}` : 'Cards and legends';
   const ev = eventToday();
   $('go-race').querySelector('span')!.textContent = ev ? `Today: ${ev.name}!` : actionsLeft ? 'Pick a race' : 'Start a new day';
   $('feed-panel').hidden = true;
@@ -1162,6 +1204,7 @@ function save(): void {
       stats: player.stats, confidence, confCap, trust, needRevealed, pendingBuff, raceCount, record,
       fatigue, day, treats, pendingConfBoost, best, fedDay, drillBoost, favKnown, look, groomed, actionsLeft,
     }));
+    scheduleBackup();
   } catch { /* storage unavailable: play on without saving */ }
 }
 
@@ -1413,6 +1456,66 @@ $('st-web').addEventListener('click', () => {
   save();
 });
 $('hall-back').addEventListener('click', () => show('stable'));
+$('card-find').addEventListener('click', () => void findCard(($('card-code') as HTMLInputElement).value));
+$('card-code').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void findCard(($('card-code') as HTMLInputElement).value); });
+$('card-add').addEventListener('click', () => {
+  if (!foundCard || hall.some((c) => c.code === foundCard!.code)) return;
+  hall.push(foundCard);
+  saveHall();
+  const name = foundCard.horse.name;
+  foundCard = null;
+  ($('card-code') as HTMLInputElement).value = '';
+  renderHall();
+  $('card-msg').textContent = `${name} joined your Hall of Fame as a guest.`;
+});
+
+// ---------- Backup & restore ----------
+function renderBackup(): void {
+  const code = backupCode();
+  $('backup-code').textContent = code;
+  $('backup-qr').innerHTML = qrSVG(restoreUrl(code), 120);
+  const at = lastBackup();
+  if (!$('backup-status').dataset.live) $('backup-status').textContent = at ? `Saved ${at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : 'Not yet';
+}
+onBackupStatus((s) => {
+  const el = $('backup-status');
+  el.dataset.live = '1';
+  el.textContent = s === 'saving' ? 'Saving…' : s === 'saved' ? 'Backed up ✓' : 'Offline: will retry';
+  el.className = s === 'offline' ? 'warn' : '';
+});
+$('backup-box').addEventListener('toggle', renderBackup);
+$('backup-copy').addEventListener('click', () => {
+  void navigator.clipboard?.writeText(backupCode()).then(() => { $('backup-copy').textContent = 'Copied ✓'; setTimeout(() => { $('backup-copy').textContent = 'Copy'; }, 1500); });
+});
+let restoreCode: string | null = null;
+async function findBackup(input: string): Promise<void> {
+  const msg = $('restore-msg');
+  $('restore-go').hidden = true;
+  restoreCode = null;
+  const code = cleanBackupCode(input);
+  if (!code) { msg.textContent = 'That doesn\'t look like a backup code. It reads like SAVE-7KQ2-M9XA-4RTB.'; return; }
+  ($('restore-code') as HTMLInputElement).value = code;
+  if (code === backupCode()) { msg.textContent = 'That\'s this phone\'s own backup code.'; return; }
+  msg.textContent = 'Looking up the backup…';
+  try {
+    const b = await peekBackup(code);
+    if (!b) { msg.textContent = `No backup found for ${code}.`; return; }
+    restoreCode = code;
+    const when = new Date(b.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    msg.textContent = `Found a stable${b.horse ? ` with ${b.horse}` : ''}${b.hall ? ` and ${b.hall} Hall of Fame card${b.hall > 1 ? 's' : ''}` : ''}, saved ${when}. Restoring replaces everything on this phone, and from then on both phones share one stable (the latest save wins), so play on one at a time.`;
+    $('restore-go').hidden = false;
+  } catch {
+    msg.textContent = 'Couldn\'t reach the backups. Check the internet connection and try again.';
+  }
+}
+$('restore-find').addEventListener('click', () => void findBackup(($('restore-code') as HTMLInputElement).value));
+$('restore-go').addEventListener('click', async () => {
+  if (!restoreCode) return;
+  $('restore-go').textContent = 'Restoring…';
+  if (await restoreBackup(restoreCode)) { history.replaceState(null, '', location.pathname); location.reload(); }
+  else { $('restore-msg').textContent = 'That backup could not be loaded. Try again.'; $('restore-go').textContent = "Replace this phone's stable"; }
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void backupNow(); });
 
 load();
 player.look = look;
@@ -1429,3 +1532,13 @@ applyJockey();
 // A finished career goes straight to its ceremony.
 if (raceCount >= CAREER_RACES) retire();
 else show('stable');
+// Links from a card's QR (?card=) or a backup QR (?restore=).
+{
+  const q = new URLSearchParams(location.search);
+  const card = q.get('card');
+  const rest = q.get('restore');
+  if (card || rest) history.replaceState(null, '', location.pathname + (q.has('local') ? '?local' : ''));
+  if (card) { renderHall(); ($('card-code') as HTMLInputElement).value = card; void findCard(card); }
+  else if (rest) { show('stable'); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
+}
+setTimeout(() => { void backupNow(); void shareCards(); }, 2500);

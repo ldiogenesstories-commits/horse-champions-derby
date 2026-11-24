@@ -118,7 +118,17 @@
       <summary>Barn friends <span id="friends-count">0 of 6</span></summary>
       <ul class="album" id="album-list"></ul>
     </details>
-    <button class="station hall-btn" id="go-hall" hidden><b>Hall of Fame</b><span id="hall-count"></span></button>
+    <button class="station hall-btn" id="go-hall"><b>Hall of Fame</b><span id="hall-count"></span></button>
+    <details class="card backup-box" id="backup-box">
+      <summary>Backup &amp; restore <span id="backup-status"></span></summary>
+      <p class="panel-note">Your stable backs itself up online after every change. Keep this backup code somewhere safe (a photo is fine) to bring everything back on a new phone.</p>
+      <div class="backup-row"><b id="backup-code"></b><button class="ghost small" id="backup-copy">Copy</button></div>
+      <div class="backup-qr" id="backup-qr"></div>
+      <div class="sec-t">Restore on this phone</div>
+      <div class="rename-row"><input id="restore-code" placeholder="SAVE-XXXX-XXXX-XXXX" maxlength="60" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Backup code"><button class="big go" id="restore-find">Find</button></div>
+      <p class="muted card-msg" id="restore-msg" aria-live="polite"></p>
+      <button class="big go" id="restore-go" hidden>Replace this phone's stable</button>
+    </details>
     <button class="ghost small start-over" id="start-over">Start over (reset this horse)</button>
   </section>
 
@@ -140,7 +150,7 @@
       <div class="card-title">Name your new horse</div>
       <div class="rename-row"><input id="ret-name-input" maxlength="18" autocomplete="off" spellcheck="false" aria-label="New horse name"><button class="big go" id="ret-name-go">Start career</button></div>
     </div>
-    <p class="muted ret-note">Your card is saved in the Hall of Fame on this device. The QR holds the card's code and stats so it can be scanned back in later.</p>
+    <p class="muted ret-note">Your card is in the Hall of Fame. Share its code, or let someone scan the QR with their phone camera, to add this horse to their Hall of Fame too.</p>
   </section>
 
   <section id="family" class="screen" aria-label="Family race"><div id="family-root"></div></section>
@@ -152,6 +162,14 @@
     <div class="eyebrow">Your stable's legends</div>
     <h1>Hall of Fame</h1>
     <button class="big go hall-breed" id="hall-breed">Breed a foal</button>
+    <div class="card hall-add">
+      <div class="card-title">Add a horse card</div>
+      <p class="panel-note">Type the code from a card, or point your phone's camera at its QR code. Guest horses can be bred with.</p>
+      <div class="rename-row"><input id="card-code" placeholder="HCD-XXXX-XXXX" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Card code"><button class="big go" id="card-find">Find</button></div>
+      <p class="muted card-msg" id="card-msg" aria-live="polite"></p>
+      <div class="card-preview" id="card-preview"></div>
+      <button class="big go" id="card-add" hidden>Add to Hall of Fame</button>
+    </div>
     <div class="hall-grid" id="hall-grid"></div>
   </section>
 

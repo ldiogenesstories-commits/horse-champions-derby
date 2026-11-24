@@ -641,3 +641,21 @@ button.st-nameplate.editable { cursor: pointer; }
 .bc-cut-text span { font-size: clamp(16px, 3vh, 26px); font-weight: 800; }
 .bc-count[hidden] { display: none; }
 #race.tv .race-top, #race.tv .ribbon-wrap { display: none !important; }
+
+/* ---------- Cards from friends + backups ---------- */
+.hall-add { margin: 12px 0 16px; }
+.hall-add .panel-note, .backup-box .panel-note { margin: 4px 0 10px; }
+.card-msg { margin: 8px 0 0; min-height: 1.2em; }
+.card-preview:not(:empty) { max-width: 300px; margin: 10px auto; }
+.hall-add #card-add { width: 100%; margin-top: 6px; }
+#card-code, #restore-code { text-transform: uppercase; letter-spacing: .06em; }
+.backup-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #FFFBF2; border: 2px dashed #2B2118; border-radius: 10px; padding: 8px 12px; }
+.backup-row b { font-size: 17px; letter-spacing: .06em; }
+.backup-qr { display: flex; justify-content: center; margin: 10px 0 4px; }
+.backup-box #restore-go { width: 100%; margin-top: 8px; }
+#backup-status { font-weight: 700; color: #3E6B48; }
+#backup-status.warn { color: #C8452D; }
+.backup-box { margin-top: 14px; }
+.backup-box summary { font-family: var(--display); font-size: 18px; cursor: pointer; }
+.backup-box summary span { font-family: var(--body, inherit); font-size: 13px; margin-left: 6px; }
+.backup-box[open] summary { margin-bottom: 8px; }
