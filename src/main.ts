@@ -38,6 +38,7 @@ import { Ranch, type Station } from './game/ranch';
 import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup, useCardFoalSlot } from './net/cloud';
 import { SHARED_FOAL_LIMIT } from './career/breeding';
 import { showPedigree } from './career/pedigreeView';
+import { playIntro, shouldPlayIntro } from './intro/intro';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -1860,5 +1861,11 @@ else show('stable');
   if (card || rest) history.replaceState(null, '', location.pathname + (q.has('local') ? '?local' : ''));
   if (card) { renderHall(); ($('card-code') as HTMLInputElement).value = card; void findCard(card); }
   else if (rest) { openBarn(); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
+}
+// Opening sequence. Tapping the title card is where the main menu will go; for now it
+// drops straight into the game.
+if (shouldPlayIntro()) {
+  sceneAmb.set(null); // keep the barn ambience out of the score
+  playIntro(() => show((document.body.dataset.screen as Screen) || 'stable'));
 }
 setTimeout(() => { void backupNow(); void shareCards(); }, 2500);

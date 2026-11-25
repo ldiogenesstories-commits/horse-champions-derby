@@ -23,6 +23,11 @@ export function unlockAudio(): void {
   if (ctx.state === 'suspended') void ctx.resume();
 }
 
+/** The shared audio graph, for longer pieces of music (null until a tap has unlocked audio). */
+export function audioGraph(): { ctx: AudioContext; out: GainNode } | null {
+  return ctx && master ? { ctx, out: master } : null;
+}
+
 export const isMuted = () => muted;
 export function setMuted(m: boolean): void {
   muted = m;
