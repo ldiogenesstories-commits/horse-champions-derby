@@ -37,8 +37,10 @@ export interface HorseDef {
   /** What drives it: shapes how it races and what it needs after a race. */
   need?: Need;
   /** Visible genetics for portraits (later: inherited from sire and dam). */
-  coat?: 'bay' | 'chestnut' | 'grey' | 'black' | 'palomino';
+  coat?: 'bay' | 'chestnut' | 'grey' | 'black' | 'palomino' | 'dapple' | 'roan';
   marking?: 'none' | 'star' | 'blaze' | 'snip';
+  /** Coat and marking genes (two each); what shows is whichever is dominant. Older horses have none. */
+  genes?: { coat: [NonNullable<HorseDef['coat']>, NonNullable<HorseDef['coat']>]; marking: [NonNullable<HorseDef['marking']>, NonNullable<HorseDef['marking']>] };
   /** Best race length. */
   sex?: 'mare' | 'stallion';
   /** Parents' names, for foals you breed. */
@@ -52,6 +54,8 @@ export interface HorseDef {
   potential?: { speed: number; stamina: number; accel: number; guts: number; gate: number; agility: number };
   /** Grooming look (player horses); portraits and race tokens show it. */
   look?: import('../game/horseBody').Look;
+  /** Breeding: foals this horse has had on its home ranch. */
+  foals?: number;
   distancePref?: 'sprint' | 'mile' | 'classic' | 'endurance';
 }
 

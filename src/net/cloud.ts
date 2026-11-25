@@ -22,6 +22,13 @@ const fake = (k: string) => `hcd-fakecloud-${k}`;
 async function call<T>(fn: string, args: Record<string, unknown>): Promise<T | null> {
   if (LOCAL_MODE) {
     if (fn === 'card_put') { if (!localStorage.getItem(fake(args.p_code as string))) localStorage.setItem(fake(args.p_code as string), JSON.stringify(args.p_data)); return null; }
+    if (fn === 'card_breed') {
+      const k = fake(`foals-${args.p_code as string}`);
+      const used = Number(localStorage.getItem(k) ?? 0);
+      if (used >= (args.p_max as number)) return -1 as T;
+      localStorage.setItem(k, String(used + 1));
+      return (used + 1) as T;
+    }
     if (fn === 'save_put') { localStorage.setItem(fake(args.p_key as string), JSON.stringify(args.p_data)); return null; }
     const raw = localStorage.getItem(fake((args.p_code ?? args.p_key) as string));
     return raw ? (JSON.parse(raw) as T) : null;
@@ -50,6 +57,15 @@ export const cardUrl = (code: string) => `${location.origin}${location.pathname}
 
 export async function publishCard(code: string, card: unknown): Promise<void> {
   await call('card_put', { p_code: code, p_data: card });
+}
+
+/**
+ * Use up one of a scanned-in card's shared foal slots (max foals across ALL ranches).
+ * Returns the foals used so far, or -1 if the card is full, or -2 if the card isn't on the server.
+ */
+export async function useCardFoalSlot(code: string, max: number): Promise<number> {
+  const n = await call<number>('card_breed', { p_code: code, p_max: max });
+  return n ?? -2;
 }
 
 export async function fetchCard<T>(code: string): Promise<T | null> {

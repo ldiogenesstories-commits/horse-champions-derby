@@ -8,7 +8,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "sim:test": "tsx scripts/balance.ts",
-    "narration:test": "tsx scripts/narration.ts"
+    "narration:test": "tsx scripts/narration.ts",
+    "breeding:test": "tsx scripts/breeding.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",
