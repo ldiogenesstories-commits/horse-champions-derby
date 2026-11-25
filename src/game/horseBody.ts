@@ -18,6 +18,8 @@ export interface Look {
   wraps: boolean;
   crown: boolean;
   polish: boolean;
+  /** Saddle pad colour from the Shop; empty = racing colour. */
+  padColor?: string;
 }
 export const DEFAULT_LOOK: Look = { mane: 'loose', tail: 'loose', forelock: 'loose', bow: 'none', bowColor: '', pad: false, wraps: false, crown: false, polish: false };
 
@@ -95,7 +97,7 @@ export function horseBodySVG(def: HorseDef, look: Look, opts: { shine?: boolean;
   const angle = (i: number) => (opts.pose === undefined ? 0 : -SWING[i] * Math.sin(2 * Math.PI * (opts.pose + PHASE[i])));
   const leg = (i: number) => `<g transform="rotate(${angle(i).toFixed(1)} ${HIP[i][0]} ${HIP[i][1]})"><polygon points="${LEG_SHAPE[i]}" fill="${i % 2 ? shade : c.body}"/>${wrapOf(i)}${hoofOf(i)}</g>`;
   const bob = opts.pose === undefined ? 0 : -5 * Math.abs(Math.sin(2 * Math.PI * opts.pose));
-  const pad = look.pad ? `<path d="M168 104 C188 100 212 100 230 104 L236 150 C210 156 186 156 162 150 Z" fill="${silk}" stroke="#2B2118" stroke-width="2"/>
+  const pad = look.pad ? `<path d="M168 104 C188 100 212 100 230 104 L236 150 C210 156 186 156 162 150 Z" fill="${look.padColor || silk}" stroke="#2B2118" stroke-width="2"/>
     <path d="M172 110 C190 106 210 106 226 110 L230 144 C208 148 188 148 168 144 Z" fill="none" stroke="#FFFBF2" stroke-width="2.5" stroke-dasharray="5 3"/>` : '';
   const crown = look.crown ? [[278, 40, '#F7A8B8'], [286, 30, '#FFD23F'], [295, 26, '#FFFBF2'], [304, 30, '#F7A8B8'], [282, 50, '#9CC3D5']]
     .map(([x, y, col]) => `<g transform="translate(${x} ${y})">${[0, 72, 144, 216, 288].map((r) => `<ellipse cx="0" cy="-4.2" rx="3" ry="4.2" transform="rotate(${r})" fill="${col}" stroke="#2B2118" stroke-width="0.8"/>`).join('')}<circle r="2.2" fill="#E2A93B"/></g>`).join('')

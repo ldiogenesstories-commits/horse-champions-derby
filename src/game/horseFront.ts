@@ -57,7 +57,7 @@ export function horseFrontSVG(def: HorseDef, look: Look, j: Jockey | null, pose:
     <!-- chest and shoulders -->
     <ellipse cx="100" cy="148" rx="54" ry="44" fill="${c.body}" stroke="${INK}" stroke-width="2.5"/>
     <ellipse cx="62" cy="150" rx="14" ry="34" fill="${c.shade}"/><ellipse cx="138" cy="150" rx="14" ry="34" fill="${c.shade}"/>
-    ${look.pad ? `<path d="M52 124 Q100 110 148 124 L144 112 Q100 100 56 112 Z" fill="${silk}" stroke="${INK}" stroke-width="1.5"/>` : ''}
+    ${look.pad ? `<path d="M52 124 Q100 110 148 124 L144 112 Q100 100 56 112 Z" fill="${look.padColor || silk}" stroke="${INK}" stroke-width="1.5"/>` : ''}
     ${j ? `    <!-- rider crouched up behind the head: shoulders in silks, arms down to the reins -->
     <path d="M58 66 Q100 36 142 66 L134 90 Q100 76 66 90 Z" fill="${s.fill}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>
     <path d="M68 74 L74 116" stroke="${INK}" stroke-width="10" stroke-linecap="round"/><path d="M68 74 L74 116" stroke="${sleeve}" stroke-width="7" stroke-linecap="round"/>

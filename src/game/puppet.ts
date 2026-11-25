@@ -299,6 +299,10 @@ function patternMask(pattern: SilksPattern, w: number, h: number): Uint8ClampedA
   if (pattern === 'stripes') for (let x = w * 0.08; x < w; x += w / 5) g.fillRect(x, 0, w / 11, h);
   if (pattern === 'halves') g.fillRect(w / 2, 0, w / 2, h);
   if (pattern === 'sash') { g.lineWidth = u / 5; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, h); g.stroke(); }
+  if (pattern === 'quarters') { g.fillRect(0, 0, w / 2, h / 2); g.fillRect(w / 2, h / 2, w / 2, h / 2); }
+  if (pattern === 'checks') { const s = u / 6; for (let y = 0, r = 0; y < h; y += s, r++) for (let x = (r % 2) * s; x < w; x += s * 2) g.fillRect(x, y, s, s); }
+  if (pattern === 'spots') { const s = u / 4; for (let y = s / 2, r = 0; y < h + s; y += s * 0.8, r++) for (let x = (r % 2) * s / 2; x < w + s; x += s) { g.beginPath(); g.arc(x, y, s * 0.22, 0, Math.PI * 2); g.fill(); } }
+  if (pattern === 'bolt') { g.beginPath(); g.moveTo(w * 0.62, 0); g.lineTo(w * 0.3, h * 0.55); g.lineTo(w * 0.52, h * 0.55); g.lineTo(w * 0.38, h); g.lineTo(w * 0.78, h * 0.4); g.lineTo(w * 0.55, h * 0.4); g.lineTo(w * 0.75, 0); g.closePath(); g.fill(); }
   if (pattern === 'chevron') {
     g.lineWidth = u / 12;
     for (let y = -h * 0.2; y < h; y += h / 3) { g.beginPath(); g.moveTo(0, y); g.lineTo(w / 2, y + w * 0.3); g.lineTo(w, y); g.stroke(); }
@@ -343,7 +347,7 @@ async function partsFor(def: HorseDef, j: Jockey | null, order: Part[], look: Lo
     else if (p.tint === 'skin') src = j ? recolour(img, j.skin, 'skin') : img;
     else if (p.tint === 'hair') src = recolour(img, j?.hairColor ?? '#1E1714', 'hair');
     else if (p.tint === 'cap') src = recolour(img, j?.cap ?? '#D96C2C', 'cap');
-    else if (p.tint === 'accent') src = recolour(img, (p.id === 'pad' ? '' : look.bowColor) || def.color, 'accent', dark);
+    else if (p.tint === 'accent') src = recolour(img, (p.id === 'pad' ? look.padColor ?? '' : look.bowColor) || def.color, 'accent', dark);
     else if (p.far) src = recolour(img, '', 'coat', dark);
     out.set(key, src);
   }

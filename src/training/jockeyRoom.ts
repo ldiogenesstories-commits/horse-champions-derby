@@ -2,6 +2,7 @@ import { cleanName } from '../game/names';
 // Jockey room: name your jockey, pick silks, cap and rider looks.
 // Preview shows your jockey aboard your current horse.
 import type { HorseDef } from '../sim/types';
+import { ownedPatterns } from '../profile/shop';
 import { BODIES, HAIRS, HAIR_COLORS, PATTERNS, SILK_COLORS, SKIN_TONES, type Jockey } from '../game/jockey';
 import { puppetFrames } from '../game/puppet';
 
@@ -49,7 +50,7 @@ export function runJockeyRoom(root: HTMLElement, horse: HorseDef, start: Jockey,
   };
   const chips = () => {
     let h = '';
-    if (tab === 'silks') h = PATTERNS.map(([v, l]) => ch('pattern', v, l)).join('');
+    if (tab === 'silks') h = [...PATTERNS, ...ownedPatterns()].map(([v, l]) => ch('pattern', v, l)).join('');
     if (tab === 'colours') h = '<div class="gr-sub">Main colour</div>' + SILK_COLORS.map(([v, l]) => sw('primary', v, l)).join('')
       + '<div class="gr-sub">Second colour</div>' + SILK_COLORS.map(([v, l]) => sw('secondary', v, l)).join('');
     if (tab === 'cap') h = SILK_COLORS.map(([v, l]) => sw('cap', v, l)).join('');

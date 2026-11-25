@@ -19,7 +19,7 @@ const START_LAG = 120; // the score starts ~0.12s after we ask; keep the visuals
 /** Skip the opening for deep links (a scanned card or backup code) and ?nointro. */
 export function shouldPlayIntro(): boolean {
   const q = new URLSearchParams(location.search);
-  return !(q.has('card') || q.has('restore') || q.has('nointro'));
+  return !(q.has('card') || q.has('restore') || q.has('screen') || q.has('nointro'));
 }
 
 // Pieces that pop up when the curtain opens on scene 2: [image, left%, bottom%, width%, delay ms]

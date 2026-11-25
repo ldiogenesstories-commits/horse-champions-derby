@@ -4,6 +4,7 @@
 import type { HorseDef } from '../sim/types';
 import type { Look, ManeStyle, TailStyle, ForelockStyle, BowSpot } from '../game/horseBody';
 import { puppetFrames, puppetHoofPoints } from '../game/puppet';
+import { ownedBowColors, ownedPadColors } from '../profile/shop';
 
 export type CareKind = 'brush' | 'hooves';
 
@@ -119,9 +120,13 @@ export function runGrooming(root: HTMLElement, o: Opts): () => void {
     if (tab === 'bows') {
       html = BOWS.map(([v, l]) => chip(l, look.bow === v, `bow:${v}`)).join('')
         + '<div class="gr-sub">Ribbon color</div>'
-        + BOW_COLORS.map(([v, l]) => chip(l, look.bowColor === v, `bowColor:${v}`, v)).join('');
+        + [...BOW_COLORS, ...ownedBowColors()].map(([v, l]) => chip(l, look.bowColor === v, `bowColor:${v}`, v)).join('');
     }
-    if (tab === 'extras') html = EXTRAS.map(([k, l]) => chip(l, look[k], `toggle:${k}`)).join('');
+    if (tab === 'extras') {
+      html = EXTRAS.map(([k, l]) => chip(l, look[k], `toggle:${k}`)).join('');
+      const pads = ownedPadColors();
+      if (pads.length) html += '<div class="gr-sub">Saddle pad color</div>' + [['', 'Silks'] as [string, string], ...pads].map(([v, l]) => chip(l, (look.padColor ?? '') === v, `padColor:${v}`, v)).join('');
+    }
     $('gr-chips').innerHTML = html;
     root.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   }
@@ -192,6 +197,7 @@ export function runGrooming(root: HTMLElement, o: Opts): () => void {
     if (k === 'toggle') { const key = v as keyof Pick<Look, 'pad' | 'wraps' | 'crown' | 'polish'>; look = { ...look, [key]: !look[key] }; }
     else look = { ...look, [k]: v };
     if (k === 'bowColor' && look.bow === 'none') look.bow = 'mane';
+    if (k === 'padColor') look.pad = true;
     o.onLook(look);
     chips();
     draw();

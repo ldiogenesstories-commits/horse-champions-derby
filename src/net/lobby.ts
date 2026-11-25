@@ -16,6 +16,10 @@ interface LobbyOpts {
   distances: { key: string; label: string }[];
   onStart: (room: Room, start: StartMsg, members: Member[]) => void;
   onBack: () => void;
+  /** 'big': Big Screen Mode — one phone races, a TV or computer shows the broadcast. */
+  mode?: 'family' | 'big';
+  /** Join this room straight away as the big screen (from a ?screen=CODE link). */
+  joinAsScreen?: string;
 }
 
 const MAX_HORSES = 8;
@@ -28,6 +32,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
   const $ = (id: string) => root.querySelector(`#${id}`) as HTMLElement;
 
   function home(): void {
+    if (o.mode === 'big') { bigHome(); return; }
     root.innerHTML = `
       <button class="ghost small back" id="lb-back">← Back</button>
       <div class="eyebrow">Family race</div>
@@ -54,11 +59,40 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
     $('lb-code').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') join(); });
   }
 
+  function bigHome(): void {
+    root.innerHTML = `
+      <button class="ghost small back" id="lb-back">← Back</button>
+      <div class="eyebrow">Big Screen Mode</div>
+      <h1>Race on the big screen</h1>
+      <p class="sub">Show the race broadcast on a TV or computer and ride from your phone.</p>
+      <div class="card">
+        <div class="card-title">On your phone</div>
+        <button class="big go lb-wide" id="lb-create">Use this phone to ride</button>
+        <p class="muted">You'll get a code to type on the big screen.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">On the TV or computer</div>
+        <p class="muted">Open the game in the browser, choose Big Screen, then type the phone's code here.</p>
+        <div class="rename-row"><input id="lb-code" placeholder="e.g. PONY-42" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="10" aria-label="Room code"><button class="big go" id="lb-join">This is the big screen</button></div>
+      </div>
+      <p class="muted lb-status" id="lb-status"></p>`;
+    $('lb-back').addEventListener('click', o.onBack);
+    $('lb-create').addEventListener('click', () => enter(makeRoomCode(), false, true));
+    const join = () => {
+      const c = normalizeCode(($('lb-code') as HTMLInputElement).value);
+      if (c.length < 4) { $('lb-status').textContent = 'Type the code shown on your phone.'; return; }
+      enter(c, true);
+    };
+    $('lb-join').addEventListener('click', join);
+    $('lb-code').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') join(); });
+  }
+
   function enter(code: string, tv: boolean, creator = false): void {
     lastSig = '';
     root.innerHTML = `
       <div class="lb-top"><div><div class="eyebrow">Room code</div><div class="lb-code" id="lb-roomcode">${code}</div></div><button class="ghost small" id="lb-leave">Leave</button></div>
       <p class="muted" id="lb-conn">Connecting…</p>
+      ${o.mode === 'big' && !tv ? `<p class="card lb-howto">On the TV or computer, open <b>${location.host || 'the game'}</b>, tap <b>Big Screen</b>, choose <b>This is the big screen</b> and type <b>${code}</b>. Or open <b>${location.host}${location.pathname}?screen=${code}</b>.</p>` : ''}
       <ul class="lb-members" id="lb-members"></ul>
       <div id="lb-host"></div>
       <button class="big lb-wide" id="lb-ready" hidden></button>`;
@@ -123,7 +157,8 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
     } else host.innerHTML = '<p class="muted lb-wait">The host picks the distance and starts the race.</p>';
   }
 
-  home();
+  if (o.joinAsScreen) enter(normalizeCode(o.joinAsScreen), true);
+  else home();
   return {
     leave: () => { room?.leave(); room = null; },
     /** After a race: everyone comes back to the room, not ready yet. */

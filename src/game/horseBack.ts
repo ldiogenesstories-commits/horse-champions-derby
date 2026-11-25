@@ -55,7 +55,7 @@ export function horseBackSVG(def: HorseDef, look: Look, pose: number): string {
     <!-- back and rump -->
     <ellipse cx="100" cy="128" rx="52" ry="40" fill="${c.body}" stroke="${INK}" stroke-width="2.5"/>
     <path d="M52 118 Q100 70 148 118" fill="${c.shade}" opacity="0.5"/>
-    ${look.pad ? `<path d="M58 100 Q100 78 142 100 L140 90 Q100 70 60 90 Z" fill="${silk}" stroke="${INK}" stroke-width="1.5"/>` : ''}
+    ${look.pad ? `<path d="M58 100 Q100 78 142 100 L140 90 Q100 70 60 90 Z" fill="${look.padColor || silk}" stroke="${INK}" stroke-width="1.5"/>` : ''}
     <path d="M100 96 V156" stroke="${c.shade}" stroke-width="3"/>
     ${tail}${tailBow}
   </g>
