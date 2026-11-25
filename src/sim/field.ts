@@ -64,6 +64,7 @@ export function makeField(seed: number, player: HorseDef | null, playerPlan: Rac
       boldness: Math.round(35 + rng() * 45),
       need: NEEDS[Math.floor(rng() * NEEDS.length)],
       coat: (['bay', 'chestnut', 'grey', 'black', 'palomino'] as const)[Math.floor(rng() * 5)],
+    arc: (['early', 'steady', 'late'] as const)[Math.abs(seed * 7 + 3) % 3],
       marking: (['none', 'star', 'blaze', 'snip'] as const)[Math.floor(rng() * 4)],
       distancePref: (['sprint', 'mile', 'classic', 'endurance'] as const)[dIdx],
     };

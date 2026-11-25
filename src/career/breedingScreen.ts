@@ -6,6 +6,7 @@ import type { RetiredCard } from './career';
 import { tierOf } from '../sim/growth';
 import { breedFoal, coatChances, homeFoalsLeft, HOME_FOAL_LIMIT, lineagePerks, outlook, sexOf, SHARED_FOAL_LIMIT, suggestName, visitingPartners, type Partner } from './breeding';
 import { carriedCoat } from '../sim/genetics';
+import { arcHint } from '../sim/arc';
 import { hd } from '../game/money';
 import { sparksOf } from '../sim/growth';
 
@@ -126,6 +127,7 @@ export function runBreeding(root: HTMLElement, o: {
         return `<div class="stat"><span>${l}</span><span class="num"><small>Typical</small><span class="tier ${typ.cls}">${typ.name}</span>${top.name !== typ.name ? `<small>up to</small><span class="tier ${top.cls}">${top.name}</span>` : ''}</span></div>`;
       }).join('')}
         ${coatBlock(a, b)}
+        <p class="muted br-note"><b>Maturity (parents' average): ${arcHint(a, b)}.</b> Foals usually take after one parent, but not always. You'll only know for sure when the horse retires.</p>
         <p class="muted br-note">${premier ? 'A Premier Partner guarantees <b>at least one shining star</b> (a standout stat), with about a 1 in 4 chance of two.' : 'About 1 in 10 foals is a <b>shining star</b>, born with a standout stat (often a parent\'s best), and now and then two.'} Personality and favourite things come from one parent or the other. Every foal also inherits hidden <b>peaks</b> (how high each stat can ever be trained), and parents with high peaks pass on higher ones.</p></div>`
       + `<label class="jr-name">Name your foal <input id="br-name" maxlength="18" autocomplete="off" spellcheck="false" value="${name.replace(/"/g, '')}"></label>`
       + '<button class="big go br-go" id="br-go">Welcome the foal!</button>';

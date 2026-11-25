@@ -13,7 +13,7 @@
   <section id="ranch" class="screen" aria-label="Ranch">
     <div class="rn-stage" id="rn-stage">
       <div class="rn-hud">
-        <div class="rn-id"><b id="rn-name">Gale Runner</b><span id="rn-day">Day 1</span></div>
+        <div class="rn-id"><b id="rn-name">Gale Runner</b><span id="rn-day">Week 1</span></div>
         <div class="rn-meters">
           <div class="act-pips" id="rn-actions"></div>
           <div class="rn-fat" title="Fatigue"><i id="rn-fatigue"></i></div>
@@ -43,7 +43,7 @@
         <div class="eyebrow">Horse Champions Derby</div>
         <h1 id="st-title">Gale Runner's stable</h1>
       </div>
-      <div class="st-day" id="st-day">Day 1</div>
+      <div class="st-day" id="st-day">Week 1</div>
     </header>
 
     <div class="st-scene" id="st-scene">
@@ -79,16 +79,18 @@
       <div class="g-row fatigue-row"><span id="st-fatigue-num">Fresh</span><div class="bar fatigue"><i id="st-fatigue"></i></div><span class="num">Fatigue</span></div>
     </div>
     <div class="g-row actions-row"><span>Actions</span><div class="act-pips" id="st-actions"></div><span class="num" id="st-actions-num">3 left</span></div>
+    <div class="st-weeks" id="st-weeks"></div>
     <div class="st-msg" id="st-msg" aria-live="polite"></div>
 
     <div class="stations">
       <button class="station" id="go-train"><b>Training board</b><span>Mini-games build stats</span></button>
       <button class="station" id="go-rest"><b>Rest</b><span>Fatigue −50</span></button>
       <button class="station" id="go-treats"><b>Treat bag</b><span id="treat-count">Empty</span></button>
-      <button class="station" id="go-feed"><b>Feed bin</b><span id="feed-status">Breakfast time</span></button>
+      <button class="station" id="go-feed"><b>Feed bin</b><span id="feed-status">Feeding time</span></button>
       <button class="station" id="go-groom"><b>Grooming kit</b><span id="groom-status">Brush · braid · dress up</span></button>
       <button class="station" id="go-jockey"><b>Jockey room</b><span id="jockey-status">Silks · cap · rider</span></button>
       <button class="station primary" id="go-race"><b>Race office</b><span>Pick a race</span></button>
+      <button class="station" id="go-week"><b>Train another week</b><span>Skip the race · uses a week</span></button>
     </div>
 
     <div class="panel" id="train-panel" hidden>

@@ -100,8 +100,8 @@ export function runGrooming(root: HTMLElement, o: Opts): () => void {
   function careButtons(): void {
     const b = $('gr-brush');
     const h = $('gr-hooves');
-    b.innerHTML = done.brush ? '<b>Brush coat ✓</b><span>Shiny for today</span>' : mode === 'brush' ? '<b>Brushing…</b><span>Rub the dust spots</span>' : '<b>Brush coat</b><span>Rub off the dust · Trust</span>';
-    h.innerHTML = done.hooves ? '<b>Pick hooves ✓</b><span>All clean today</span>' : mode === 'hooves' ? '<b>Picking…</b><span>Tap each hoof</span>' : '<b>Pick hooves</b><span>Tap all four · Trust</span>';
+    b.innerHTML = done.brush ? '<b>Brush coat ✓</b><span>Shiny this week</span>' : mode === 'brush' ? '<b>Brushing…</b><span>Rub the dust spots</span>' : '<b>Brush coat</b><span>Rub off the dust · Trust</span>';
+    h.innerHTML = done.hooves ? '<b>Pick hooves ✓</b><span>All clean this week</span>' : mode === 'hooves' ? '<b>Picking…</b><span>Tap each hoof</span>' : '<b>Pick hooves</b><span>Tap all four · Trust</span>';
     b.toggleAttribute('disabled', done.brush);
     h.toggleAttribute('disabled', done.hooves);
     b.classList.toggle('on', mode === 'brush');

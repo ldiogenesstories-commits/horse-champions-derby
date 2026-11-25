@@ -919,3 +919,5 @@ body[data-screen="menu"] #snd { display: none; }
 .res-prize { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 5px 14px 5px 6px; border: 3px solid var(--ink); border-radius: 999px; background: #FFF4C9; font-weight: 800; }
 .res-prize[hidden] { display: none; }
 .lb-howto { font-size: 14px; }
+.st-weeks { margin: 6px 2px 0; font-weight: 800; font-size: 13px; color: var(--ink-soft); }
+.st-weeks.warn { color: #B3261E; }
