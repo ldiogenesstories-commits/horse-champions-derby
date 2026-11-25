@@ -9,6 +9,7 @@ import { trackPoint } from '../sim/track';
 import { DEFAULT_JOCKEY, type Jockey, type SilksPattern } from './jockey';
 import { portraitSVG } from './portrait';
 import { puppetFrames, puppetFrontFrames } from './puppet';
+import { RaceAmbience, cameraCut, crowdRoar, cutIn, freezeBeat } from './sfx';
 import { loadScenery, tileRun, tileX, type Scenery } from './scenery';
 
 const FRAMES = 12; // gallop poses per horse
@@ -63,6 +64,8 @@ export class Broadcast {
   private dust: { x: number; y: number; r: number; life: number }[] = [];
   private bounds = { minX: 0, maxX: 1, minY: 0, maxY: 1 };
   private onShot: (s: Shot) => void;
+  private amb = new RaceAmbience();
+  private roared = false;
 
   constructor(host: HTMLElement, onShot: (s: Shot) => void) {
     this.onShot = onShot;
@@ -117,12 +120,15 @@ export class Broadcast {
       <div class="bc-cut" id="bc-cut" hidden></div>`;
     this.shot = 'track';
     this.setShot('aerial', 3);
+    this.roared = false;
+    this.amb.start();
     this.last = performance.now();
     const loop = (now: number) => { this.frame(now); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
   }
 
   stop(): void {
+    this.amb.stop();
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.ui.innerHTML = '';
@@ -135,7 +141,7 @@ export class Broadcast {
 
   // ---------- director ----------
   private setShot(s: Shot, until: number): void {
-    if (s !== this.shot) { this.shot = s; this.onShot(s); this.dust = []; }
+    if (s !== this.shot) { if (this.raf) cameraCut(); this.shot = s; this.onShot(s); this.dust = []; }
     this.shotUntil = until;
     this.canvas.style.display = s === 'aerial' ? 'none' : 'block';
     const label = this.ui.querySelector('#bc-shot') as HTMLElement | null;
@@ -188,6 +194,7 @@ export class Broadcast {
         this.leaderCutAt = t; this.lastLeaderCut = who.def.number;
       }
       this.showCut(who, cap, t + (ev.code === 'win' ? 3 : 1.6));
+      if (ev.code === 'win') { if (!this.roared) { this.roared = true; crowdRoar(true); } } else cutIn(ev.code!);
       this.cutCooldown = t + 3.2;
     }
     if (this.cut && t > this.cut.until) { this.cut = null; (this.ui.querySelector('#bc-cut') as HTMLElement).hidden = true; }
@@ -318,6 +325,21 @@ export class Broadcast {
     this.cut = { until, html: el.innerHTML };
   }
 
+  /** Crowd builds as the leader nears the wire; hooves are loudest on the close-in shots. */
+  private soundscape(r: Race): void {
+    const lead = Math.max(...r.horses.map((x) => x.dist));
+    const prog = Math.min(1, Math.max(0, lead / r.distance));
+    if (r.finished) {
+      if (!this.roared) { this.roared = true; crowdRoar(true); }
+      this.amb.set(0.75, 0.12, 0.45);
+      return;
+    }
+    const gate = r.t < 0.5;
+    const crowd = gate ? 0.05 : 0.18 + 0.5 * prog * prog + (this.finale ? 0.3 : 0);
+    const near: Record<Shot, number> = { close: 1, rail: 1, headon: 0.95, track: 0.7, aerial: 0.3, winner: 0.25 };
+    this.amb.set(crowd, gate ? 0 : near[this.shot], 1);
+  }
+
   // ---------- drawing ----------
   private frame(now: number): void {
     const r = this.race;
@@ -326,6 +348,7 @@ export class Broadcast {
     this.last = now;
     this.direct(r);
     this.graphics(r);
+    this.soundscape(r);
     // The drive home: freeze for a beat, rivals in shadow, the leader in full colour.
     const left = r.distance - Math.max(...r.horses.map((x) => x.dist));
     if (!this.fxDone && !r.finished && r.t > 4 && left < 110) {
@@ -333,6 +356,8 @@ export class Broadcast {
       const hero = r.standings()[0];
       this.fx = { start: now, hero: hero.def.id, snap: new Map(r.horses.map((x) => [x.def.id, { dist: x.dist, lane: x.lane }])) };
       (this.ui.querySelector('#bc-cut') as HTMLElement | null)?.setAttribute('hidden', '');
+      freezeBeat(FX_LEN);
+      this.amb.duck(FX_LEN);
     }
     if (this.fx) {
       const el = (now - this.fx.start) / 1000;

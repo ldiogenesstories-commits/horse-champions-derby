@@ -181,3 +181,128 @@ export function crowdRoar(win = false, top3 = false): void {
     [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(at + i * 0.12, f, i === 3 ? 0.7 : 0.14, 'sawtooth', 0.06, { attack: 0.02, lowpass: 2400, vibrato: 3 }));
   }
 }
+
+// ---------- Live race soundscape (TV broadcast) ----------
+
+/** A quick camera-cut whoosh between broadcast shots. */
+export function cameraCut(): void {
+  if (!ready()) return;
+  noise(now(), 0.18, 'bandpass', 2500, 900, 1.2, 0.07, 0.01);
+}
+
+/** Sound for a comic-panel cut-in, by what happened. */
+export function cutIn(code: string): void {
+  if (!ready()) return;
+  const t = now();
+  if (code === 'stumble') {
+    // The crowd gasps.
+    noise(t, 0.6, 'bandpass', 1400, 600, 1.5, 0.18, 0.04);
+    tone(t, 520, 0.4, 'triangle', 0.08, { slideTo: 260 });
+    return;
+  }
+  // Comic "BAM": a short punch and a bright stinger.
+  tone(t, 140, 0.2, 'sine', 0.4, { slideTo: 55 });
+  noise(t, 0.15, 'lowpass', 5000, 900, 0.5, 0.2, 0.003);
+  const up = code === 'stretch' || code === 'finalLap';
+  [0, 1].forEach((i) => tone(t + 0.05 + i * 0.08, (up ? 659.3 : 784) * (i ? 1.5 : 1), 0.18, 'sawtooth', 0.05, { lowpass: 2600 }));
+}
+
+/** The final-stretch freeze: everything drops out, a rising whoosh, then the slam. */
+export function freezeBeat(len: number): void {
+  if (!ready()) return;
+  const t = now();
+  tone(t, 90, 0.25, 'sine', 0.45, { slideTo: 40 });
+  noise(t, 0.12, 'lowpass', 7000, 1500, 0.5, 0.25, 0.003);
+  noise(t + 0.1, len - 0.15, 'bandpass', 300, 3200, 2, 0.12, len * 0.7); // rising whoosh
+  tone(t + 0.1, 110, len - 0.15, 'sawtooth', 0.04, { slideTo: 440, attack: len * 0.6, lowpass: 900 });
+  // The slam as the race snaps back.
+  tone(t + len, 120, 0.3, 'sine', 0.5, { slideTo: 45 });
+  noise(t + len, 0.3, 'lowpass', 6000, 700, 0.5, 0.3, 0.003);
+}
+
+/** A crowd that murmurs at the start and builds to a roar, plus galloping hooves. */
+export class RaceAmbience {
+  private crowdG: GainNode | null = null;
+  private crowdHiG: GainNode | null = null;
+  private srcs: AudioBufferSourceNode[] = [];
+  private timer = 0;
+  private nextBeat = 0;
+  private beat = 0;
+  private crowd = 0.2;
+  private hoof = 0.5;
+  private tempo = 1; // gallop strides per second ≈ 2.2 * tempo
+  private duckUntil = 0;
+
+  start(): void {
+    this.stop();
+    if (!ctx || !master || !noiseBuf) return;
+    const c = ctx;
+    const mk = (f: number, q: number) => {
+      const s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+      const bq = c.createBiquadFilter(); bq.type = 'bandpass'; bq.frequency.value = f; bq.Q.value = q;
+      const g = c.createGain(); g.gain.value = 0.0001;
+      s.connect(bq).connect(g).connect(master!);
+      s.start(c.currentTime, Math.random() * 1.5);
+      this.srcs.push(s);
+      return g;
+    };
+    this.crowdG = mk(800, 0.6);
+    this.crowdHiG = mk(1800, 1.1);
+    this.nextBeat = c.currentTime + 0.1;
+    this.timer = window.setInterval(() => this.schedule(), 40);
+    this.apply();
+  }
+
+  /** crowd: 0 (murmur) .. 1 (roar); hooves: 0 (silent) .. 1 (right by the rail). */
+  set(crowd: number, hooves: number, tempo = 1): void {
+    this.crowd = Math.max(0, Math.min(1, crowd));
+    this.hoof = Math.max(0, Math.min(1, hooves));
+    this.tempo = tempo;
+    this.apply();
+  }
+
+  /** Drop the crowd out for a moment (the freeze-frame), then let it rush back. */
+  duck(seconds: number): void {
+    if (!ctx) return;
+    this.duckUntil = ctx.currentTime + seconds;
+    for (const g of [this.crowdG, this.crowdHiG]) g?.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.04);
+    window.setTimeout(() => this.apply(true), seconds * 1000);
+  }
+
+  private apply(force = false): void {
+    if (!ctx || !this.crowdG || !this.crowdHiG) return;
+    if (!force && ctx.currentTime < this.duckUntil) return;
+    const c = this.crowd;
+    this.crowdG.gain.setTargetAtTime(0.04 + c * 0.22, ctx.currentTime, force ? 0.08 : 0.4);
+    this.crowdHiG.gain.setTargetAtTime(0.01 + c * c * 0.12, ctx.currentTime, force ? 0.08 : 0.4);
+  }
+
+  /** Look-ahead scheduler for the hoofbeats: a four-beat gallop rhythm. */
+  private schedule(): void {
+    if (!ctx || !master) return;
+    const stride = 1 / (2.2 * Math.max(0.2, this.tempo));
+    const offsets = [0, 0.14, 0.26, 0.4]; // ta-ka-ta ... dum
+    while (this.nextBeat < ctx.currentTime + 0.12) {
+      const i = this.beat % 4;
+      const t = this.nextBeat;
+      if (this.hoof > 0.02 && t >= this.duckUntil) {
+        const lvl = this.hoof * (i === 3 ? 1 : 0.7) * (0.85 + Math.random() * 0.3);
+        tone(t, 95 + Math.random() * 20, 0.07, 'sine', 0.22 * lvl, { slideTo: 55 });
+        noise(t, 0.05, 'lowpass', 1600, 500, 0.7, 0.12 * lvl, 0.002);
+      }
+      this.beat++;
+      this.nextBeat += i === 3 ? stride * (1 - offsets[3]) : stride * (offsets[i + 1] - offsets[i]);
+    }
+  }
+
+  stop(): void {
+    window.clearInterval(this.timer);
+    this.timer = 0;
+    const t = ctx?.currentTime ?? 0;
+    for (const g of [this.crowdG, this.crowdHiG]) g?.gain.setTargetAtTime(0.0001, t, 0.3);
+    const srcs = this.srcs;
+    this.srcs = [];
+    window.setTimeout(() => srcs.forEach((s) => { try { s.stop(); } catch { /* already stopped */ } }), 1500);
+    this.crowdG = this.crowdHiG = null;
+  }
+}
