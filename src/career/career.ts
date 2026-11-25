@@ -16,6 +16,17 @@ export interface CareerLog {
   crowdGifts: number;
   distances: string[];
   bestPlace: number;
+  /** Class ladder: current class (0 = Maiden), wins in it, highest class reached, Grand Prix wins. */
+  cls?: number;
+  clsWins?: number;
+  topClass?: number;
+  gpWins?: number;
+  /** Career points from placings, weighted by class. */
+  ladderPts?: number;
+  /** Big races won (names). */
+  bigWins?: string[];
+  /** Head-to-head records against named rivals. */
+  rivals?: Record<string, { beat: number; lost: number }>;
 }
 export const NEW_CAREER = (): CareerLog => ({ eventWins: [], crowdGifts: 0, distances: [], bestPlace: 99 });
 
@@ -38,19 +49,25 @@ export interface RetiredCard {
 }
 
 export function careerPoints(rec: { w: number; p: number; s: number }, log: CareerLog): number {
-  return rec.w * 10 + rec.p * 6 + rec.s * 3 + log.eventWins.length * 12;
+  // Careers from before the class ladder use the flat formula.
+  const placings = log.ladderPts !== undefined ? Math.round(log.ladderPts) : rec.w * 10 + rec.p * 6 + rec.s * 3;
+  return placings + log.eventWins.length * 12;
 }
 
 export function rankFor(points: number): string {
-  if (points >= 190) return 'Legend';
-  if (points >= 125) return 'Champion';
-  if (points >= 75) return 'Star';
-  if (points >= 30) return 'Contender';
+  // Tuned for the class ladder (wins high up the ladder are worth more).
+  if (points >= 300) return 'Legend';
+  if (points >= 210) return 'Champion';
+  if (points >= 130) return 'Star';
+  if (points >= 60) return 'Contender';
   return 'Fan Favourite';
 }
 
 export function badgesFor(log: CareerLog, trust: number): string[] {
   const b: string[] = [];
+  for (const w of [...new Set(log.bigWins ?? [])]) b.push(`🏆 ${w} winner`);
+  if (log.gpWins) b.push(log.gpWins > 1 ? `${log.gpWins}x Grand Prix winner` : 'Grand Prix winner');
+  else if ((log.topClass ?? 0) > 0) b.push(`Reached ${['Maiden', 'Novice', 'Graded', 'Stakes', 'Grand Prix'][log.topClass!]}`);
   for (const e of [...new Set(log.eventWins)]) b.push(`${e} winner`);
   if (log.crowdGifts > 0) b.push('Crowd Favourite');
   if (new Set(log.distances).size >= 4) b.push('Ran every distance');

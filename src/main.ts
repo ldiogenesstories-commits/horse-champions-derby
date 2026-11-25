@@ -48,7 +48,11 @@ import { decorSVG } from './profile/decor';
 import { runHome } from './menu/home';
 import { hd, hdCoin } from './game/money';
 import { PREMIER_COST } from './career/breeding';
-import { CAREER_WEEKS, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
+import { canEnterUp, currentClass, ladderLine, recordFinish, termsFor, CLASSES, type RaceTerms } from './career/ladder';
+import { bigRaceOn, nextBigRace, type BigRace } from './career/bigRaces';
+import { addRivals, recordRivals, rivalsFor, rivalOf } from './career/rivals';
+import { owns } from './profile/profile';
+import { CAREER_WEEKS, DECLINE_EVERY, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -216,7 +220,7 @@ function renderPaddock(): void {
   renderFit();
   setRide(rideAuto, false);
 
-  field = makeField(fieldSeed, player, plan, rideAuto, confidence, 8, confCap, pendingBuff);
+  field = buildField();
   $('field-name').textContent = `· post positions`;
   $('field-list').innerHTML = field
     .map((e) => `<li class="${e.isPlayer ? 'you' : ''}"><span class="bust">${portraitSVG(e.def, 34)}</span><span><b class="num-chip" style="background:${e.def.color};color:${textOn(e.def.color)}">${e.def.number}</b> ${e.def.name}${e.isPlayer ? ' (you)' : ''}</span><span class="sty">${STYLE_LABEL[e.def.style]} · ${DIST_INFO[(e.def.distancePref ?? 'mile') as DistanceKey].label}</span></li>`)
@@ -287,7 +291,14 @@ function startRace(): void {
   net = null;
   netDone = false;
   $('race').classList.remove('tv');
-  field = makeField(fieldSeed, player, { ...plan }, rideAuto, confidence, 8, confCap, pendingBuff);
+  ranTerms = terms();
+  ranBig = bigEntered ? bigToday() : null;
+  if (ranBig) distKey = ranBig.dist;
+  field = buildField();
+  // Entry fee: paid from the wallet (as much as you have; the office is kind to kids)
+  if (ranTerms.fee) spend(Math.min(ranTerms.fee, wallet()));
+  bigEntered = false;
+  upEntered = false;
   if (pendingBuff) setTimeout(() => setCall(`${player.name} is In Form today!`, 'player'), 50);
   pendingBuff = undefined;
   const me = field.find((e) => e.isPlayer);
@@ -297,7 +308,7 @@ function startRace(): void {
   raceEvent = eventEntered ? eventToday() : null;
   eventEntered = false;
   $('race').classList.toggle('night', raceEvent?.id === 'night');
-  $('rt-race').textContent = raceEvent ? `${raceEvent.name} · ${DIST_INFO[distKey].label}` : DIST_INFO[distKey].race;
+  $('rt-race').textContent = ranBig ? `🏆 ${ranBig.name} · ${DIST_INFO[distKey].label}` : raceEvent ? `${raceEvent.name} · ${DIST_INFO[distKey].label}` : DIST_INFO[distKey].race;
   launchRace(fieldSeed * 7 + raceCount);
   // ?bcast previews the big-screen broadcast in a solo race.
   if (new URLSearchParams(location.search).has('bcast')) { $('race').classList.add('tv'); startBroadcast(new Map([['player', jockey]]), $('rt-race').textContent ?? ''); }
@@ -502,7 +513,12 @@ function showResults(r: Race): void {
   const p = r.player!;
   raceCount++;
   countRace();
-  const prize = prizeFor(p.place, !!raceEvent);
+  const t = ranTerms ?? termsFor(career);
+  const prize = Math.round(prizeFor(p.place, !!raceEvent) * (net ? 1 : t.prize));
+  const promoted = net ? null : recordFinish(career, p.place, { points: t.points, winBonus: t.winBonus, winsWorth: t.winsWorth });
+  if (!net && ranBig && p.place === 1) (career.bigWins ??= []).push(ranBig.name);
+  const rivalLines = net ? [] : recordRivals(career, p.place, st.filter((h) => rivalOf(h.def.id)).map((h) => ({ id: h.def.id, place: h.place })));
+  const bigLine = ranBig ? (p.place === 1 ? `🏆 ${player.name} wins the ${ranBig.name}!` : `${ranBig.name}: finished ${ordinal(p.place)}.`) : '';
   if (prize) earn(prize);
   $('res-prize').hidden = !prize;
   $('res-prize').innerHTML = prize ? `${hdCoin(26)}<span>Prize money <b>${hd(prize)}</b> · Wallet ${hd(wallet())}</span>` : '';
@@ -554,7 +570,7 @@ function showResults(r: Race): void {
   if (p.energy > 25) tips.push(`Finished with ${Math.round(p.energy)}% energy left: you could have pushed harder.`);
   const mins = Math.floor(p.finishTime / 60);
   const secs = (p.finishTime % 60).toFixed(2).padStart(5, '0');
-  $('res-sub').textContent = `${raceEvent ? `${raceEvent.name} · ` : ''}${DIST_INFO[distKey].race} (${DISTANCES[distKey].toLocaleString()} m) · time ${mins ? `${mins}:${secs}` : `${secs}s`} · plan: ${START_LABEL[p.plan.start]} → ${TRACK_LABEL[p.plan.track]} → ${CLOSE_LABEL[p.plan.close]}. ${tips.join(' ')}`;
+  $('res-sub').textContent = `${ranBig ? `${ranBig.name} · ` : raceEvent ? `${raceEvent.name} · ` : ''}${DIST_INFO[distKey].race} (${DISTANCES[distKey].toLocaleString()} m) · time ${mins ? `${mins}:${secs}` : `${secs}s`} · plan: ${START_LABEL[p.plan.start]} → ${TRACK_LABEL[p.plan.track]} → ${CLOSE_LABEL[p.plan.close]}. ${tips.join(' ')}`;
   $('res-list').innerHTML = st
     .map((h) => {
       const gap = h.place === 1 ? `${h.finishTime.toFixed(2)}s` : `+${(h.finishTime - winT).toFixed(2)}s`;
@@ -567,6 +583,9 @@ function showResults(r: Race): void {
   $('praise-msg').textContent = '';
   renderGrowthLog();
   greeted = false;
+  if (bigLine) growthLog.push({ text: bigLine, cls: 'big' });
+  for (const l of rivalLines) growthLog.push({ text: l, cls: l.startsWith('⚔️') ? 'big' : '' });
+  if (promoted) growthLog.push({ text: `🏅 Promoted! ${player.name} moves up to ${promoted} races: tougher rivals, bigger prizes.`, cls: 'big' });
   if (earnedShoe) growthLog.push({ text: `🍀 Earned a Lucky Horseshoe! Every stat can now grow a little higher.`, cls: 'big' });
   checkFriends();
   renderGrowthLog();
@@ -654,6 +673,7 @@ $('new-field').addEventListener('click', () => { fieldSeed++; renderPaddock(); }
 $('dist-pick').addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest('button');
   if (!b) return;
+  if (bigEntered) { stableMsg(''); $('dist-fit').textContent = `The ${bigToday()?.name} is run at the ${DIST_INFO[bigToday()!.dist].label}. Tap the big race card to run a normal race instead.`; return; }
   distKey = b.dataset.d as DistanceKey;
   // Longer races default to a slightly faster play speed (still adjustable).
   const sp = $('t-speed') as HTMLInputElement;
@@ -781,11 +801,11 @@ const pastPeak = (): boolean => day > PEAK_WEEK[arcOf(player)];
 
 /**
  * A week has gone by (raced or trained). Past its peak a horse slowly loses form:
- * one point every other week, from its best stats, up to MAX_DECLINE in all.
+ * a point every DECLINE_EVERY weeks, from its best stats, up to MAX_DECLINE in all.
  */
 function weekPassed(): boolean {
   const peak = PEAK_WEEK[arcOf(player)];
-  if (day <= peak || declined >= MAX_DECLINE || (day - peak) % 2 !== 0) return false;
+  if (day <= peak || declined >= MAX_DECLINE || (day - peak) % DECLINE_EVERY !== 0) return false;
   const top = (Object.keys(player.stats) as StatKey[]).sort((a, b) => player.stats[b] - player.stats[a]).slice(0, 3);
   const k = top[Math.floor(Math.random() * top.length)];
   player.stats[k] = Math.max(30, player.stats[k] - 1);
@@ -1052,7 +1072,21 @@ const EVENTS: RaceEvent[] = [
   { id: 'harvest', name: 'Harvest Classic', blurb: 'The autumn showpiece. Win it for a prize meal.' },
 ];
 // Every third day the race office runs a special event.
-const eventToday = (): RaceEvent | null => (day % 3 === 0 ? EVENTS[(day / 3 - 1) % EVENTS.length] : null);
+const eventToday = (): RaceEvent | null => (day % 3 === 0 && !bigRaceOn(day) ? EVENTS[(day / 3 - 1) % EVENTS.length] : null);
+/** Race office choices for this week's race. */
+let bigEntered = false;
+let upEntered = false;
+const bigToday = (): BigRace | null => (activeRetired() ? null : bigRaceOn(day));
+const terms = (): RaceTerms => termsFor(career, { up: upEntered && !bigEntered, big: bigEntered ? bigToday() : null });
+/** The field for this week's race: class (or big-race) rivals, plus any named rivals. */
+function buildField(): Entrant[] {
+  const t = terms();
+  const f = makeField(fieldSeed, player, { ...plan }, rideAuto, confidence, 8, confCap, pendingBuff, t.rivals);
+  return addRivals(f, rivalsFor(fieldSeed, bigEntered), t.rivals, fieldSeed * 3 + day);
+}
+/** The race that ran: kept for the results screen. */
+let ranTerms: RaceTerms | null = null;
+let ranBig: BigRace | null = null;
 let eventEntered = false;
 let raceEvent: RaceEvent | null = null;
 let pendingGift: { food: FoodId; from: 'crowd' | 'prize' } | null = null;
@@ -1127,7 +1161,7 @@ function renderStable(): void {
   const tight = wl <= racesLeft();
   $('st-weeks').textContent = tight
     ? `Only ${wl} week${wl === 1 ? '' : 's'} left for ${racesLeft()} race${racesLeft() === 1 ? '' : 's'}: race every week!`
-    : `${racesLeft()} races and ${wl} weeks left`;
+    : `${ladderLine(career)} · ${racesLeft()} races, ${wl} weeks left${nextBigRace(day) ? ` · Next big race: ${nextBigRace(day)!.name} (week ${nextBigRace(day)!.week})` : ''}`;
   $('st-weeks').classList.toggle('warn', tight);
   $('go-week').querySelector('span')!.textContent = rustWeeks ? `Rusty after ${rustWeeks} week${rustWeeks === 1 ? '' : 's'} off` : 'Skip the race · uses a week';
   const fs = fatigueState();
@@ -1254,7 +1288,7 @@ function rest(): void {
   const before = fatigue;
   if (!needAction()) return;
   spendAction();
-  fatigue = Math.max(0, fatigue - 50);
+  fatigue = Math.max(0, fatigue - (owns('facility:spa') ? 65 : 50));
   growthLog = [];
   if (before >= 50) changeTrust(1, 'a well-earned rest');
   stableMsg(before >= 50 ? `${player.name} had a good nap. Trust +1.` : `${player.name} lazed about.`);
@@ -1321,7 +1355,7 @@ function finishDrill(d: DrillDef, r: DrillResult & { margin?: string; overWhips?
     drillBoost = 0;
     // Social horses thrive with a partner; loners would rather work alone.
     const company = d.id === 'partner' ? (player.need === 'social' ? 1.2 : player.need === 'loner' ? 0.8 : 1) : 1;
-    const gain = GRADE_GAIN[r.grade] * (tired ? 0.5 : 1) * (1 + fueled) * company;
+    const gain = GRADE_GAIN[r.grade] * (tired ? 0.5 : 1) * (1 + fueled) * company * (owns('facility:track') ? 1.1 : 1);
     const main = d.main!, side = d.side;
     // A single-stat drill puts all of its gain into that stat.
     // Swimming also eases fatigue, so it trains a little less hard.
@@ -1484,10 +1518,13 @@ $('go-race').addEventListener('click', () => {
   const n = raceCount + 1;
   $('pre-sub').textContent = n >= CAREER_RACES
     ? `Race ${n} of ${CAREER_RACES}: the Farewell Race. Make it count!`
-    : `Race ${n} of ${CAREER_RACES}. Choose a distance and your race plan, then load the gate.`;
+    : bigToday() ? `Race ${n} of ${CAREER_RACES} · 🏆 ${bigToday()!.name} week! Enter it, or run a normal ${currentClass(career).name} race.` : `Race ${n} of ${CAREER_RACES} · ${currentClass(career).name} race. Choose a distance and your race plan, then load the gate.`;
   eventEntered = !!eventToday();
+  bigEntered = !!bigToday();
+  upEntered = false;
   renderEvent();
   renderPaddock();
+  renderRaceOffice();
   show('pre');
   if (fatigue > 40 || hungry()) setTimeout(() => alertFatigue(), 0);
 });
@@ -1606,6 +1643,33 @@ function finishFamilyRace(): void {
 $('go-family').addEventListener('click', () => openFamily());
 $('gift-accept').addEventListener('click', () => answerGift(true));
 $('gift-decline').addEventListener('click', () => answerGift(false));
+/** Big race and enter-up cards, and the entry fee, in the race office. */
+function renderRaceOffice(): void {
+  const big = bigToday();
+  $('big-card').hidden = !big;
+  if (big) {
+    $('big-title').textContent = `${big.name} · ${DIST_INFO[big.dist].label}`;
+    $('big-blurb').textContent = `${big.blurb} Prizes ×${big.prize}, a trophy, and a win counts double toward moving up. Entry ħ${big.fee}.`;
+    $('big-rivals').innerHTML = rivalsFor(0, true).map((r) => `<li><b>${r.name}</b> · ${r.tagline}</li>`).join('');
+    $('big-enter').textContent = bigEntered ? 'Entered ✓ (tap to skip it)' : `Enter the ${big.name}`;
+    $('big-card').classList.toggle('on', bigEntered);
+    if (bigEntered) { distKey = big.dist; renderDistance(); }
+  }
+  const up = canEnterUp(career) && !bigEntered;
+  $('up-card').hidden = !up;
+  if (up) {
+    const next = CLASSES[(career.cls ?? 0) + 1];
+    $('up-blurb').textContent = `Race against ${next.name} horses for ×${next.prize} prizes and more career points. A win counts double toward moving up. Entry ħ${next.fee}.`;
+    $('up-enter').textContent = upEntered ? 'Entered up ✓ (tap to undo)' : `Enter up to ${next.name}`;
+    $('up-card').classList.toggle('on', upEntered);
+  }
+  const t = terms();
+  const nb = nextBigRace(day + 1);
+  $('fee-line').innerHTML = `${t.label} race · Entry fee ${t.fee ? `${hd(t.fee)}` : 'free'} · You have ${hd(wallet())}${nb && !big ? ` · Next big race: ${nb.name} in week ${nb.week}` : ''}`;
+}
+$('big-enter').addEventListener('click', () => { bigEntered = !bigEntered; if (bigEntered) upEntered = false; renderRaceOffice(); renderPaddock(); });
+$('up-enter').addEventListener('click', () => { upEntered = !upEntered; renderRaceOffice(); renderPaddock(); });
+
 function renderEvent(): void {
   const ev = eventToday();
   $('event-card').hidden = !ev;

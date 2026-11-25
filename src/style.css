@@ -921,3 +921,12 @@ body[data-screen="menu"] #snd { display: none; }
 .lb-howto { font-size: 14px; }
 .st-weeks { margin: 6px 2px 0; font-weight: 800; font-size: 13px; color: var(--ink-soft); }
 .st-weeks.warn { color: #B3261E; }
+
+.big-card { border: 3px solid #B8962F; background: #FFF4C9; }
+.big-card.on { box-shadow: 0 0 0 3px var(--flash); }
+.big-rivals { margin: 6px 0 10px; padding-left: 18px; font-size: 13px; }
+.up-card.on { background: #E7F2DF; }
+.fee-line { font-size: 13px; font-weight: 700; margin: 6px 2px; }
+.hm-fac { font-size: 30px; }
+.hm-item small { font-size: 11px; line-height: 1.2; }
+.big-card button.big, .up-card button.big { white-space: normal; height: auto; min-height: 52px; padding: 8px 16px; width: 100%; }

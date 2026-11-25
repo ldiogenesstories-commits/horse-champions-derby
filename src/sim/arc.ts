@@ -10,9 +10,11 @@ export const CAREER_WEEKS = 50;
 export const PEAK_WEEK: Record<Arc, number> = { early: 30, steady: 38, late: 44 };
 export const ARC_LABEL: Record<Arc, string> = { early: 'Early bloomer', steady: 'Steady', late: 'Late bloomer' };
 /** Total stat points a horse can lose after its peak. */
-export const MAX_DECLINE = 8;
+export const MAX_DECLINE = 15;
+/** Past the peak, a stat point is lost every this-many weeks. */
+export const DECLINE_EVERY = 1;
 /** After its peak, training gains are this much smaller. */
-export const PAST_PEAK_GAIN = 0.5;
+export const PAST_PEAK_GAIN = 0.25;
 /** Chance a foal breaks from its parents' arcs. */
 export const ARC_SURPRISE = 0.15;
 
