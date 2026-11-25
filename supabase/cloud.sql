@@ -38,3 +38,23 @@ $$;
 
 revoke all on function public.card_put(text, jsonb), public.card_get(text), public.save_put(text, jsonb), public.save_get(text) from public;
 grant execute on function public.card_put(text, jsonb), public.card_get(text), public.save_put(text, jsonb), public.save_get(text) to anon, authenticated;
+
+
+-- Shared breeding limit: how many foals a card has had across ALL ranches that scanned it in.
+-- Run this block in the Supabase SQL Editor (safe to run more than once).
+alter table public.hcd_cards add column if not exists foals int not null default 0;
+
+-- Takes one slot if any are left. Returns foals used so far, -1 if full, -2 if the card is unknown.
+-- The check and the increment happen in one statement, so two people can't take the last slot together.
+create or replace function public.card_breed(p_code text, p_max int) returns int
+language plpgsql security definer set search_path = public as $$
+declare used int;
+begin
+  update hcd_cards set foals = foals + 1 where code = upper(p_code) and foals < p_max returning foals into used;
+  if found then return used; end if;
+  if exists (select 1 from hcd_cards where code = upper(p_code)) then return -1; end if;
+  return -2;
+end;
+$$;
+revoke all on function public.card_breed(text, int) from public;
+grant execute on function public.card_breed(text, int) to anon, authenticated;

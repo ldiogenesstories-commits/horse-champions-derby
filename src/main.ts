@@ -35,7 +35,8 @@ import { DEFAULT_JOCKEY, silksBadge, type Jockey } from './game/jockey';
 import { runJockeyRoom } from './training/jockeyRoom';
 import { Broadcast } from './game/broadcast';
 import { Ranch, type Station } from './game/ranch';
-import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup } from './net/cloud';
+import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup, useCardFoalSlot } from './net/cloud';
+import { SHARED_FOAL_LIMIT } from './career/breeding';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -800,7 +801,23 @@ function openBreeding(preselect?: string): void {
     hall,
     preselect,
     seed: Date.now() % 100000,
-    onDone: (foal) => newHorse(foal),
+    onDone: async (foal, used) => {
+      // Each parent from the Hall uses up one foal slot. Home-raised horses count on this ranch (3);
+      // scanned-in horses count on the server across every ranch (4), so check that first.
+      const cards = [used.parent, used.partnerCard].filter((c): c is RetiredCard => !!c);
+      for (const c of cards.filter((x) => x.guest)) {
+        try {
+          const r = await useCardFoalSlot(c.code, SHARED_FOAL_LIMIT);
+          if (r === -1) return `${c.horse.name} has already had ${SHARED_FOAL_LIMIT} foals across all ranches and is retired from breeding.`;
+          if (r === -2) return `${c.horse.name}'s card isn't on the shared stable, so it can't be bred from. Ask the owner to share it again.`;
+        } catch {
+          return 'Couldn\'t reach the shared stable to count this horse\'s foals. Check your connection and try again.';
+        }
+      }
+      for (const c of cards.filter((x) => !x.guest)) c.horse.foals = (c.horse.foals ?? 0) + 1;
+      saveHall();
+      newHorse(foal);
+    },
     onBack: () => (preselect ? retire() : renderHall()),
   });
 }

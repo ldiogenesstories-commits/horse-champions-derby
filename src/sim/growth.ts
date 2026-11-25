@@ -19,13 +19,16 @@ export const rollIn = ([lo, hi]: [number, number], rng: () => number): number =>
 export const SPARK_CHANCE = 0.1;
 export const SECOND_SPARK_CHANCE = 0.2;
 
+/** Premier partners guarantee a first star and give a better chance of a second. */
+export const PREMIER_SECOND_SPARK_CHANCE = 0.25;
+
 /** Give a foal its shining-star talents (mutates stats and potential). */
-export function rollSparks(stats: HorseDef['stats'], potential: HorseDef['stats'], rng: () => number, favour?: StatKey): StatKey[] {
-  if (rng() >= SPARK_CHANCE) return [];
+export function rollSparks(stats: HorseDef['stats'], potential: HorseDef['stats'], rng: () => number, favour?: StatKey, premier = false): StatKey[] {
+  if (!premier && rng() >= SPARK_CHANCE) return [];
   const sparks: StatKey[] = [];
   const pickOne = (): StatKey => {
     const pool = STAT_KEYS.filter((k) => !sparks.includes(k));
-    if (favour && !sparks.includes(favour) && rng() < 0.6) return favour;
+    if (favour && !sparks.includes(favour) && (premier || rng() < 0.6)) return favour;
     return pool[Math.floor(rng() * pool.length)];
   };
   const add = (k: StatKey) => {
@@ -34,7 +37,7 @@ export function rollSparks(stats: HorseDef['stats'], potential: HorseDef['stats'
     potential[k] = Math.min(100, Math.max(potential[k] + 5, stats[k] + 10));
   };
   add(pickOne());
-  if (rng() < SECOND_SPARK_CHANCE) add(pickOne());
+  if (rng() < (premier ? PREMIER_SECOND_SPARK_CHANCE : SECOND_SPARK_CHANCE)) add(pickOne());
   return sparks;
 }
 

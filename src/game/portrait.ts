@@ -9,6 +9,9 @@ export const COATS = {
   grey: { body: '#BDB7AD', shade: '#9C968C', mane: '#6E6A64' },
   black: { body: '#3A3431', shade: '#25211F', mane: '#141110' },
   palomino: { body: '#D9A85B', shade: '#B98A45', mane: '#F4E9D0' },
+  // Rare coats
+  dapple: { body: '#8E9AA6', shade: '#6C7884', mane: '#E9EDF0' },
+  roan: { body: '#A8676B', shade: '#864C50', mane: '#4A2B2D' },
 } as const;
 
 export function portraitSVG(def: HorseDef, size = 96): string {

@@ -4,11 +4,21 @@
 import { makeRng } from '../sim/rng';
 import { NEEDS } from '../sim/field';
 import type { HorseDef } from '../sim/types';
-import { BAND_HI, BAND_LO, POT_HI, POT_LO, potentialOf, rollIn, rollSparks, settlePotential } from '../sim/growth';
+import { BAND_HI, BAND_LO, POT_HI, POT_LO, potentialOf, rollIn, rollSparks, settlePotential, sparksOf } from '../sim/growth';
+import { coatOdds, inheritGenes, RARE_COATS, visibleCoat, visibleMarking, withHiddenGenes } from '../sim/genetics';
 
 type StatKey = keyof HorseDef['stats'];
 const STATS: StatKey[] = ['speed', 'stamina', 'accel', 'guts', 'gate', 'agility'];
 const COATS = ['bay', 'chestnut', 'grey', 'black', 'palomino'] as const;
+
+/** How many foals one horse can have: on its own ranch, and across everyone else who uses its card code. */
+export const HOME_FOAL_LIMIT = 3;
+export const SHARED_FOAL_LIMIT = 4;
+/** Placeholder price in Horse Dollars; tune against race prizes once the wallet exists. */
+export const PREMIER_COST = 500;
+
+/** Foals a card has left on this ranch. Guest cards (scanned in) use the shared limit instead. */
+export const homeFoalsLeft = (h: HorseDef): number => Math.max(0, HOME_FOAL_LIMIT - (h.foals ?? 0));
 const MARKS = ['none', 'star', 'blaze', 'snip'] as const;
 
 export const sexOf = (h: HorseDef): 'mare' | 'stallion' => h.sex ?? (h.name.length % 2 ? 'mare' : 'stallion');
@@ -17,11 +27,15 @@ const VISITOR_NAMES = {
   stallion: ['Captain Tumbleweed', 'Lord Buttonwood', 'Thunderclap Jr.', 'Sir Pepperpot', 'Duke of Marmalade', 'Admiral Kettle', 'Copper Crown', 'Midnight Mailman'],
   mare: ['Lady Lantern', 'Duchess Dandelion', 'Queen Biscotti', 'Miss Moonbeam', 'Clover Countess', 'Velvet Sparrow', 'Honeycomb Belle', 'Polka Dot Pearl'],
 };
+const PREMIER_NAMES = {
+  stallion: ['Grand Marshal Gold', 'Emperor Starfall', 'Sovereign Skyline', 'Royal Thunderbolt'],
+  mare: ['Empress Stardust', 'Golden Meadowlark', 'Sovereign Aurora', 'Royal Moonstone'],
+};
 const BLURBS: Record<StatKey, string> = {
   speed: 'blazing speed', stamina: 'endless stamina', accel: 'a lightning kick', guts: 'pure grit', gate: 'rocket starts', agility: 'nimble feet',
 };
 
-export interface Partner { horse: HorseDef; note: string; record: string }
+export interface Partner { horse: HorseDef; note: string; record: string; premier?: boolean; cost?: number }
 
 /** Four visiting partners of the opposite sex, each with a standout talent. */
 export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partner[] {
@@ -32,25 +46,39 @@ export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partne
   const stars = shuffle(STATS);
   const coats = shuffle(COATS);
   const silks = shuffle(['#2F5D9E', '#7A3E8E', '#3E8E8A', '#D96C2C', '#B83A6B', '#3E6B48']);
-  return names.map((name, i) => {
+  const list: Partner[] = names.map((name, i) => {
     const star = stars[i];
     const stats = Object.fromEntries(STATS.map((k) => [k, Math.round(58 + rng() * 16)])) as unknown as HorseDef['stats'];
     stats[star] = Math.round(84 + rng() * 10);
     const dIdx = Math.max(0, Math.min(3, Math.round(1.5 + (stats.stamina - stats.speed) / 10)));
     const w = Math.round(3 + rng() * 9);
     return {
-      horse: {
+      horse: withHiddenGenes({
         id: `visitor${i}`, number: 0, name, color: silks[i], stats,
         style: (['front', 'stalker', 'mid', 'closer'] as const)[Math.floor(rng() * 4)],
         fire: Math.round(rng() * 100) / 100, boldness: Math.round(45 + rng() * 35),
         need: NEEDS[Math.floor(rng() * NEEDS.length)],
         coat: coats[i], marking: MARKS[Math.floor(rng() * MARKS.length)],
         distancePref: (['sprint', 'mile', 'classic', 'endurance'] as const)[dIdx], sex,
-      },
+      }, rng),
       note: `Known for ${BLURBS[star]}.`,
       record: `${w} career wins`,
     };
   });
+  // The fourth visitor is the Premier Partner: costs Horse Dollars, carries 1-2 star
+  // traits, and guarantees the foal at least one star trait. 30% carry a hidden rare coat gene.
+  const prem = list[3];
+  const ph = prem.horse;
+  const pStars = shuffle(STATS).slice(0, rng() < 0.4 ? 2 : 1);
+  for (const k of pStars) ph.stats[k] = Math.round(92 + rng() * 5);
+  ph.sparks = pStars;
+  ph.name = shuffle(PREMIER_NAMES[sex])[0];
+  if (rng() < 0.3 && ph.genes) ph.genes = { ...ph.genes, coat: [ph.genes.coat[0], RARE_COATS[Math.floor(rng() * RARE_COATS.length)]] };
+  prem.premier = true;
+  prem.cost = PREMIER_COST;
+  prem.note = `Star trait guaranteed: ${pStars.map((k) => BLURBS[k]).join(' and ')}.`;
+  prem.record = `${Math.round(14 + rng() * 8)} career wins`;
+  return list;
 }
 
 // Every foal starts in a general band with lots of room to grow. Strong parents
@@ -84,8 +112,9 @@ export function outlook(a: HorseDef, b: HorseDef): Record<StatKey, [number, numb
   return Object.fromEntries(STATS.map((k) => [k, statRange(a.stats[k], b.stats[k])])) as unknown as Record<StatKey, [number, number]>;
 }
 
-export function possibleCoats(a: HorseDef, b: HorseDef): string[] {
-  return [...new Set([a.coat ?? 'bay', b.coat ?? 'bay'])];
+/** Every coat the foal could show, with its chance (0-1). A rare surprise gene is possible on top. */
+export function coatChances(a: HorseDef, b: HorseDef): { coat: string; p: number }[] {
+  return coatOdds(a, b);
 }
 
 /** A name built from the parents' names, e.g. "Gale" + "Moonbeam". */
@@ -99,7 +128,8 @@ export function suggestName(a: HorseDef, b: HorseDef, seed: number): string {
   return first === second ? `${first} Junior` : `${first} ${second}`;
 }
 
-export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number): HorseDef {
+/** `premier`: partner `b` is a Premier Partner, so the foal is guaranteed at least one star trait. */
+export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, premier = false): HorseDef {
   const rng = makeRng(seed);
   const pick = <T,>(x: T, y: T): T => (rng() < 0.5 ? x : y);
   const stats = Object.fromEntries(STATS.map((k) => [k, rollIn(statRange(a.stats[k], b.stats[k]), rng)])) as unknown as HorseDef['stats'];
@@ -108,12 +138,13 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number):
   // Shining star: now and then a foal is born with a standout stat (rarely two),
   // usually in whatever its parents were best at.
   const best = [...STATS].sort((p, q) => Math.max(a.stats[q], b.stats[q]) - Math.max(a.stats[p], b.stats[p]))[0];
-  const sparks = rollSparks(stats, potential, rng, best);
+  const favour = premier ? sparksOf(b)[0] ?? best : best;
+  const sparks = rollSparks(stats, potential, rng, favour, premier);
   settlePotential(stats, potential);
-  // Coat: mostly from a parent; grey tends to pass on; sometimes a surprise.
-  const greyParent = a.coat === 'grey' || b.coat === 'grey';
-  const coat = greyParent && rng() < 0.5 ? 'grey' : rng() < 0.1 ? COATS[Math.floor(rng() * COATS.length)] : pick(a.coat ?? 'bay', b.coat ?? 'bay');
-  const marking = rng() < 0.15 ? 'none' : pick(a.marking ?? 'none', b.marking ?? 'none');
+  // Coat and markings come from genes: one from each parent, so hidden genes can reappear.
+  const genes = inheritGenes(a, b, rng);
+  const coat = visibleCoat(genes.coat);
+  const marking = visibleMarking(genes.marking);
   const need = rng() < 0.2 ? NEEDS[Math.floor(rng() * NEEDS.length)] : pick(a.need ?? 'social', b.need ?? 'social');
   const dIdx = Math.max(0, Math.min(3, Math.round(1.5 + (stats.stamina - stats.speed) / 10 + (rng() - 0.5))));
   const sire = sexOf(a) === 'stallion' ? a : b;
@@ -124,7 +155,7 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number):
     style: pick(a.style, b.style),
     fire: Math.round(Math.max(0, Math.min(1, (a.fire + b.fire) / 2 + (rng() - 0.5) * 0.3)) * 100) / 100,
     boldness: Math.round(Math.max(30, Math.min(85, (a.boldness + b.boldness) / 2 + (rng() - 0.5) * 16))),
-    need, coat, marking,
+    need, coat, marking, genes,
     distancePref: (['sprint', 'mile', 'classic', 'endurance'] as const)[dIdx],
     sex: rng() < 0.5 ? 'mare' : 'stallion',
     sire: sire.name, dam: dam.name,
