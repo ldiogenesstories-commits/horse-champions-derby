@@ -3,9 +3,9 @@
 // feed trough, shade tree, training gate) offers a portal to that part of the game.
 // Steering: an on-screen thumb stick (or tap-to-go), plus arrow keys / WASD.
 import type { HorseDef } from '../sim/types';
-import { horseBodySVG, type Look } from './horseBody';
-import { horseFrontSVG } from './horseFront';
+import type { Look } from './horseBody';
 import { horseBackSVG } from './horseBack';
+import { puppetFrames, puppetFrontFrames } from './puppet';
 
 const INK = '#2B2118';
 const PAPER = '#FFFBF2';
@@ -73,9 +73,11 @@ export interface RanchHooks {
 export class Ranch {
   private canvas: HTMLCanvasElement;
   private g: CanvasRenderingContext2D;
-  private side: HTMLImageElement[] = [];
-  private graze: HTMLImageElement | null = null;
-  private front: HTMLImageElement[] = [];
+  private side: CanvasImageSource[] = [];
+  private run: CanvasImageSource[] = [];
+  private stand: CanvasImageSource | null = null;
+  private graze: CanvasImageSource | null = null;
+  private front: CanvasImageSource[] = [];
   private back: HTMLImageElement[] = [];
   private spriteKey = '';
   private raf = 0;
@@ -92,7 +94,7 @@ export class Ranch {
   private near: Station | null = null;
   private jump: { t: number; dur: number; h: number } | null = null;
   private scene: Scene | null = null;
-  private lieImg: HTMLImageElement | null = null;
+  private lieImg: CanvasImageSource | null = null;
   private fade = 0; // 0..1 paper wipe / dusk dim
   private dim = 0;
   private bits: { x: number; y: number; vx: number; vy: number; life: number; txt?: string; c?: string }[] = [];
@@ -153,14 +155,19 @@ export class Ranch {
     if (key === this.spriteKey) return;
     this.spriteKey = key;
     const sw = 340;
-    const [side, graze, front, back, lieImg] = await Promise.all([
-      Promise.all(Array.from({ length: SIDE_FRAMES }, (_, f) => loadImage(horseBodySVG(def, look, { pose: f / SIDE_FRAMES }), sw))),
-      loadImage(horseBodySVG(def, look, { graze: true }), sw),
-      Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseFrontSVG(def, look, null, f / FB_FRAMES), Math.round(sw * 200 / 320)))),
-      Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseBackSVG(def, look, f / FB_FRAMES), Math.round(sw * 200 / 320)))),
-      loadImage(horseBodySVG(def, look, { lie: true }), sw),
+    // The felt puppet (side and front); walking away still uses the drawn back view.
+    const base = 266 / 290;
+    const fw = Math.round(sw * 200 / 320);
+    const [side, run, [stand], [graze], [lieImg], front, back] = await Promise.all([
+      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'walk', base }),
+      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'gallop', base }),
+      puppetFrames(def, null, 1, sw, { mode: 'stand', base }),
+      puppetFrames(def, null, 1, sw, { mode: 'graze', base }),
+      puppetFrames(def, null, 1, sw, { mode: 'lie', base }),
+      puppetFrontFrames(def, null, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270 }),
+      Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseBackSVG(def, look, f / FB_FRAMES), fw))),
     ]);
-    Object.assign(this, { side, graze, front, back, lieImg });
+    Object.assign(this, { side, run, stand, graze, front, back, lieImg });
   }
 
   start(): void {
@@ -504,13 +511,14 @@ export class Ranch {
     const grazing = eating || (!this.jump && !sc && this.still > 3.5 && this.gait === 'stand' && this.facing !== 'back');
     const shrink = 1 - lift / 160;
     g.fillStyle = 'rgba(43,33,24,.22)'; g.beginPath(); g.ellipse(x, y, (this.facing === 'left' || this.facing === 'right' || grazing ? 74 : 40) * shrink, 12 * shrink, 0, 0, Math.PI * 2); g.fill();
-    let img: HTMLImageElement | null | undefined;
+    let img: CanvasImageSource | null | undefined;
     let w: number; let h: number; let ax: number; let ay: number;
     const pose = this.jump ? 0.3 : this.gait === 'stand' ? 0 : this.phase; // legs tucked mid-leap
     if (this.facing === 'front' && !grazing) { img = this.front[Math.floor(pose * FB_FRAMES) % FB_FRAMES]; w = 200 * K; h = 270 * K; ax = 0.5; ay = 258 / 270; }
     else if (this.facing === 'back') { img = this.back[Math.floor(pose * FB_FRAMES) % FB_FRAMES]; w = 200 * K; h = 270 * K; ax = 0.5; ay = 258 / 270; }
     else {
-      img = lying ? this.lieImg : grazing ? this.graze : this.side[Math.floor(pose * SIDE_FRAMES) % SIDE_FRAMES];
+      const cycle = this.jump || this.gait === 'canter' ? this.run : this.side;
+      img = lying ? this.lieImg : grazing ? this.graze : this.gait === 'stand' && !this.jump ? this.stand : cycle[Math.floor(pose * SIDE_FRAMES) % SIDE_FRAMES];
       w = SIDE_W; h = 290 * K; ax = 150 / 320; ay = 266 / 290;
     }
     if (!img) return;

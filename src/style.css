@@ -215,7 +215,7 @@ button.big, button.ghost { white-space: nowrap; }
 .st-nameplate { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); font-family: var(--display); font-size: 12px; letter-spacing: 1px; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); border-radius: 6px; padding: 2px 10px; white-space: nowrap; z-index: 1; }
 .bar.fatigue { background: rgba(43,33,24,0.12); }
 .st-horse { position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); width: min(78%, 290px); animation: bob 3.2s ease-in-out infinite; }
-.st-horse svg { display: block; width: 100%; height: auto; }
+.st-horse svg, .st-horse img { display: block; width: 100%; height: auto; }
 @keyframes bob { 50% { transform: translateX(-50%) translateY(-3px) rotate(-1.5deg); } }
 .st-mood { position: absolute; left: 12px; bottom: 12px; background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; padding: 4px 10px; font-weight: 800; font-size: 13px; }
 .st-status { margin: 14px 2px 4px; }

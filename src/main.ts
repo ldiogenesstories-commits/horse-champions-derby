@@ -18,7 +18,8 @@ import { runConeWeave } from './training/coneWeave';
 import { runSwimSession } from './training/swimSession';
 import { runPacePartner } from './training/pacePartner';
 import { runGrooming, type CareKind } from './training/grooming';
-import { DEFAULT_LOOK, horseBodySVG, type Look } from './game/horseBody';
+import { DEFAULT_LOOK, type Look } from './game/horseBody';
+import { puppetFrames } from './game/puppet';
 import { CAREER_RACES, NEW_CAREER, badgesFor, cardHTML, careerPoints, makeCode, rankFor, type CareerLog, type RetiredCard } from './career/career';
 import { makeFoal } from './sim/field';
 import { runBreeding } from './career/breedingScreen';
@@ -968,7 +969,7 @@ function renderStable(): void {
   nameplate.innerHTML = `${player.name.toUpperCase().replace(/[<>&]/g, '')}${canRename() ? PENCIL : ''}`;
   nameplate.classList.toggle('editable', canRename());
   nameplate.setAttribute('aria-label', canRename() ? `Rename ${player.name}` : player.name);
-  $('st-horse').innerHTML = horseBodySVG(player, look, { shine: groomToday().brush });
+  void stableHorse(player, groomToday().brush);
   $('st-day').textContent = `Day ${day}`;
   const fs = fatigueState();
   $('st-mood').textContent = pendingBuff ? 'In Form!' : hungry() ? 'Hungry' : FATIGUE_MOOD[fs];
@@ -1357,6 +1358,30 @@ function startFamilyRace(room: Room, start: StartMsg, members: Member[]): void {
     for (const r of start.roster) if (r.jockey) jockeys.set(horseIdFor(r.id), { ...(r.jockey as Jockey), name: (r.jockey as Jockey).name || r.name });
     startBroadcast(jockeys, `Family race · ${DIST_INFO[distKey].label}`);
   }
+}
+
+// ---------- Stable portrait: the felt puppet, standing ----------
+let stableKey = '';
+async function stableHorse(def: HorseDef, shine: boolean): Promise<void> {
+  const key = JSON.stringify([def.coat, def.name, shine]);
+  if (key === stableKey) return;
+  stableKey = key;
+  const [pose] = await puppetFrames(def, null, 1, 580, { mode: 'stand' });
+  if (key !== stableKey) return; // a newer request won
+  // Shrink a little, feet on the floor, so the ears clear the stall top.
+  const c = document.createElement('canvas');
+  c.width = pose.width; c.height = pose.height;
+  c.getContext('2d')!.drawImage(pose, c.width * 0.07, c.height * 0.14, c.width * 0.86, c.height * 0.86);
+  if (shine) {
+    // A soft gleam along the back after brushing.
+    const g = c.getContext('2d')!;
+    g.globalAlpha = 0.5; g.strokeStyle = '#FFFBF2'; g.lineWidth = 9; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(c.width * 0.32, c.height * 0.36); g.quadraticCurveTo(c.width * 0.45, c.height * 0.31, c.width * 0.6, c.height * 0.34); g.stroke();
+  }
+  const img = new Image();
+  img.src = c.toDataURL('image/png');
+  img.alt = def.name;
+  $('st-horse').replaceChildren(img);
 }
 
 // ---------- Big-screen broadcast ----------
