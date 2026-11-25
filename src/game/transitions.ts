@@ -2,6 +2,8 @@
 // "nature springs up" wipe for walking out of the barn onto the ranch.
 // Each one covers the screen, calls `swap()` while fully covered, then uncovers.
 
+import { crowdRoar, curtainSwish, finishHit, logoChime, naturePops } from './sfx';
+
 export type TransitionKind = 'curtain' | 'nature';
 
 const CURTAINS = ['split', 'drop', 'swag'] as const;
@@ -72,6 +74,7 @@ async function curtain(root: HTMLElement, style: (typeof CURTAINS)[number], swap
   const ease = 'cubic-bezier(.55,0,.35,1)';
 
   // Close.
+  curtainSwish();
   if (style === 'split') {
     await Promise.all([
       run(panels[0], [{ transform: 'translateX(-102%)' }, { transform: 'translateX(2%)', offset: 0.85 }, { transform: 'translateX(0)' }], { duration: 620, easing: ease }),
@@ -82,12 +85,14 @@ async function curtain(root: HTMLElement, style: (typeof CURTAINS)[number], swap
   }
 
   // Logo pops while the curtain is shut; swap the scene behind it.
+  logoChime();
   run(logo, [{ opacity: 0, transform: 'scale(.6) rotate(-6deg)' }, { opacity: 1, transform: 'scale(1.08) rotate(2deg)', offset: 0.7 }, { opacity: 1, transform: 'scale(1) rotate(0)' }], { duration: 320, easing: 'ease-out' });
   swap();
   await wait(650);
   await run(logo, [{ opacity: 1 }, { opacity: 0, transform: 'scale(.9)' }], { duration: 160 });
 
   // Open.
+  curtainSwish(true);
   if (style === 'split') {
     await Promise.all([
       run(panels[0], [{ transform: 'translateX(0)' }, { transform: 'translateX(-102%)' }], { duration: 600, easing: ease }),
@@ -126,6 +131,7 @@ async function nature(root: HTMLElement, swap: () => void): Promise<void> {
       bits.push(el);
     }
   }
+  naturePops();
   // Ground sweeps up from the bottom while plants pop up row by row behind it.
   const grow = run(ground, [{ clipPath: 'inset(100% 0 0 0)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 700, easing: 'cubic-bezier(.3,.6,.4,1)' });
   const pops = bits.map((el) => run(el, [
@@ -178,6 +184,8 @@ export async function playFinishSplash(o: { place: number; ord: string; name: st
       await run(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
       await wait(o.hold ?? 1300);
     } else {
+      finishHit();
+      crowdRoar(big, top3);
       const band = root.querySelector('.fx-band')!;
       const place = root.querySelector('.fx-place')!;
       run(root.querySelector('.fx-flash')!, [{ opacity: 0.95 }, { opacity: 0 }], { duration: 260, easing: 'ease-out' });
