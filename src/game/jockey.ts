@@ -2,7 +2,9 @@
 // The jockey is you, so it carries over to every horse you raise. Drawn as a
 // paper-cut rider that sits on the full-body horse (same coordinates).
 
-export type SilksPattern = 'solid' | 'hoops' | 'stripes' | 'halves' | 'diamonds' | 'stars' | 'chevron' | 'sash';
+export type SilksPattern = 'solid' | 'hoops' | 'stripes' | 'halves' | 'diamonds' | 'stars' | 'chevron' | 'sash'
+  // Shop patterns
+  | 'checks' | 'spots' | 'quarters' | 'bolt';
 export type HairStyle = 'short' | 'ponytail' | 'braids' | 'locs' | 'puffs' | 'spiky' | 'afro' | 'bun' | 'bob' | 'curlytop' | 'swoop';
 export type RiderBody = 'male' | 'female';
 
@@ -55,6 +57,10 @@ export function silksDefs(j: Jockey): { defs: string; fill: string } {
     case 'stripes': body = `<rect width="12" height="12" fill="${a}"/><rect x="6" width="6" height="12" fill="${b}"/>`; break;
     case 'diamonds': body = `<rect width="12" height="12" fill="${a}"/><polygon points="6,1 11,6 6,11 1,6" fill="${b}"/>`; break;
     case 'stars': body = `<rect width="12" height="12" fill="${a}"/><path d="M6 2 l1.2 2.6 2.8.3 -2.1 1.9 .6 2.8 -2.5 -1.4 -2.5 1.4 .6 -2.8 -2.1 -1.9 2.8 -.3z" fill="${b}"/>`; break;
+    case 'checks': body = `<rect width="12" height="12" fill="${a}"/><rect width="6" height="6" fill="${b}"/><rect x="6" y="6" width="6" height="6" fill="${b}"/>`; break;
+    case 'spots': body = `<rect width="12" height="12" fill="${a}"/><circle cx="3" cy="3" r="2" fill="${b}"/><circle cx="9" cy="9" r="2" fill="${b}"/>`; break;
+    case 'bolt': body = `<rect width="12" height="12" fill="${a}"/><path d="M7 0 L3 6.5 H6 L4.5 12 L9.5 5 H6.5 L8.5 0 Z" fill="${b}"/>`; break;
+    case 'quarters': return { defs: `<pattern id="${id}" width="1" height="1" patternContentUnits="objectBoundingBox"><rect width="1" height="1" fill="${a}"/><rect width=".5" height=".5" fill="${b}"/><rect x=".5" y=".5" width=".5" height=".5" fill="${b}"/></pattern>`, fill: `url(#${id})` };
     case 'chevron': body = `<rect width="12" height="12" fill="${a}"/><path d="M0 4 L6 9 L12 4 L12 8 L6 13 L0 8 Z" fill="${b}"/>`; break;
     case 'halves': return { defs: `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="0"><stop offset="0.5" stop-color="${a}"/><stop offset="0.5" stop-color="${b}"/></linearGradient>`, fill: `url(#${id})` };
     case 'sash': return { defs: `<linearGradient id="${id}" x1="0" x2="1" y1="0" y2="1"><stop offset="0.38" stop-color="${a}"/><stop offset="0.38" stop-color="${b}"/><stop offset="0.6" stop-color="${b}"/><stop offset="0.6" stop-color="${a}"/></linearGradient>`, fill: `url(#${id})` };

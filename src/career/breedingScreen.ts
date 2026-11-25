@@ -28,6 +28,8 @@ export function runBreeding(root: HTMLElement, o: {
   preselect?: string; // card code
   seed: number;
   /** Called with the new foal. Return an error message to stay on this screen (e.g. a shared-limit refusal). */
+  /** Horse Dollars on hand, for the Premier Partner's price. */
+  wallet?: () => number;
   onDone: (foal: HorseDef, used: { parent: RetiredCard; partnerCard?: RetiredCard; premier: boolean }) => void | string | Promise<void | string>;
   onBack: () => void;
 }): void {
@@ -68,10 +70,10 @@ export function runBreeding(root: HTMLElement, o: {
     const fromHall = o.hall.filter((c) => c.code !== parent!.code && sexOf(c.horse) === want);
     root.innerHTML = top(`A partner for ${p.name}`, `${p.name} is a ${sexOf(p)}. Pick a ${want} to be the foal's other parent.`)
       + '<div class="gr-sub">Visiting ' + (want === 'mare' ? 'mares' : 'stallions') + '</div>'
-      + `<div class="br-list">${partners.map((v, i) => row(v.horse, `data-visit="${i}"`, v.premier ? `${v.note} ${v.record}. <b class="br-cost">${hd(v.cost ?? 0)}</b> <small>(free while testing)</small>` : `${v.note} ${v.record}. Free.`, { premier: v.premier })).join('')}</div>`
+      + `<div class="br-list">${partners.map((v, i) => row(v.horse, `data-visit="${i}"`, v.premier ? `${v.note} ${v.record}. <b class="br-cost">${hd(v.cost ?? 0)}</b> <small>${(o.wallet?.() ?? 0) >= (v.cost ?? 0) ? 'Paid when you name the foal.' : `You have ${hd(o.wallet?.() ?? 0)}. Win more races to afford it.`}</small>` : `${v.note} ${v.record}. Free.`, { premier: v.premier, off: v.premier && (o.wallet?.() ?? 0) < (v.cost ?? 0) })).join('')}</div>`
       + (fromHall.length ? '<div class="gr-sub">From your Hall of Fame</div>' + `<div class="br-list">${fromHall.map((c) => row(c.horse, `data-hall="${c.code}"`, `${c.rank} · ${c.record.w}–${c.record.p}–${c.record.s} · ${foalsNote(c)}${c.guest ? ' · from another ranch' : ''}`, { off: !c.guest && homeFoalsLeft(c.horse) === 0 })).join('')}</div>` : '');
     $('br-back').addEventListener('click', () => (o.preselect ? o.onBack() : stepParent()));
-    root.querySelectorAll<HTMLButtonElement>('[data-visit]').forEach((b) => b.addEventListener('click', () => {
+    root.querySelectorAll<HTMLButtonElement>('[data-visit]:not([disabled])').forEach((b) => b.addEventListener('click', () => {
       const v = partners[Number(b.dataset.visit)];
       partner = v.horse; premier = !!v.premier; partnerCard = undefined; partnerRank = v.rank; stepOutlook();
     }));

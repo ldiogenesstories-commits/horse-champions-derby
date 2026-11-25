@@ -39,6 +39,15 @@ import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastB
 import { SHARED_FOAL_LIMIT } from './career/breeding';
 import { showPedigree } from './career/pedigreeView';
 import { playIntro, shouldPlayIntro } from './intro/intro';
+import {
+  SAVE_KEY, countRace, earn, emptySlots, freshSave, initStable, placeNewHorse, prizeFor, spend,
+  summaries, switchTo, takeNextScreen, wallet,
+} from './profile/profile';
+import { ownedDecor } from './profile/shop';
+import { decorSVG } from './profile/decor';
+import { runHome } from './menu/home';
+import { hd, hdCoin } from './game/money';
+import { PREMIER_COST } from './career/breeding';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -114,14 +123,18 @@ const START_LABEL: Record<StartPlan, string> = { fast: 'Fast Break', steady: 'St
 const TRACK_LABEL: Record<TrackPlan, string> = { lead: 'Push for Lead', stalk: 'Chase the Leaders', mid: 'Mid-Pack Cruise', lag: 'Lag Back' };
 const CLOSE_LABEL: Record<ClosePlan, string> = { early: 'Early Move', late: 'Late Kick', protect: 'Protect the Lead', dig: 'Dig In' };
 
-type Screen = 'ranch' | 'family' | 'breed' | 'stable' | 'drill' | 'groom' | 'jockey' | 'pre' | 'race' | 'results' | 'retire' | 'hall';
+type Screen = 'menu' | 'ranch' | 'family' | 'breed' | 'stable' | 'drill' | 'groom' | 'jockey' | 'pre' | 'race' | 'results' | 'retire' | 'hall';
 // "Home" is the ranch; the barn (the stable menu) is home only after you walk in.
 let home: 'ranch' | 'stable' = 'ranch';
 let forceBarn = false;
-const SCREENS: Screen[] = ['ranch', 'family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall'];
+/** The home menu (built at startup), and whether the current screen was opened from it. */
+let homeMenu: { refresh: () => void } | null = null;
+let fromMenu = false;
+const SCREENS: Screen[] = ['menu', 'ranch', 'family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall'];
 /** Which scene changes get a transition, and which kind. */
 function transitionFor(from: Screen | undefined, to: Screen): TransitionKind | null {
   if (!from || from === to) return null;
+  if ((from === 'menu' && (to === 'ranch' || to === 'stable' || to === 'retire')) || (to === 'menu' && (from === 'ranch' || from === 'stable'))) return 'curtain';
   if ((from === 'ranch' || from === 'stable') && to === 'pre') return 'curtain'; // heading to the races
   if (from === 'results' && (to === 'ranch' || to === 'stable' || to === 'retire' || to === 'family')) return 'curtain'; // back home
   if (from === 'stable' && to === 'ranch') return 'nature'; // out of the barn into the field
@@ -149,6 +162,7 @@ function show(id: Screen): void {
   showNow(id);
 }
 function showNow(id: Screen): void {
+  if (id === 'menu') homeMenu?.refresh();
   if (id === 'stable' || id === 'ranch') renderStable();
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
   document.body.dataset.screen = id; // lets the mute button find a free corner per screen
@@ -486,6 +500,11 @@ function showResults(r: Race): void {
   const st = r.standings();
   const p = r.player!;
   raceCount++;
+  countRace();
+  const prize = prizeFor(p.place, !!raceEvent);
+  if (prize) earn(prize);
+  $('res-prize').hidden = !prize;
+  $('res-prize').innerHTML = prize ? `${hdCoin(26)}<span>Prize money <b>${hd(prize)}</b> · Wallet ${hd(wallet())}</span>` : '';
   if (!career.distances.includes(distKey)) career.distances.push(distKey);
   career.bestPlace = Math.min(career.bestPlace, p.place);
   if (raceEvent && p.place === 1) career.eventWins.push(raceEvent.name);
@@ -698,7 +717,6 @@ let pendingConfBoost = 0;
 let cleanupDrill: (() => void) | null = null;
 const RACE_FATIGUE = 35;
 const DRILL_FATIGUE = 25;
-const SAVE_KEY = 'hcd-career-v1';
 
 // ---------- Feed bin ----------
 type FeedId = 'hay' | 'oats' | 'carrots';
@@ -788,15 +806,19 @@ function askFoalName(): void {
   input.select();
 }
 
-function newHorse(bred?: HorseDef): void {
-  const foal = bred ?? makeFoal(Date.now() % 100000, hall.map((h) => h.horse.name));
-  try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({ horse: foal, stats: foal.stats, confidence: foal.boldness, confCap: Math.min(100, foal.boldness + 15) }));
-    location.reload();
-  } catch {
-    stableMsg('Could not start a new horse: storage is unavailable here.', true);
-  }
+/** The active horse has finished its career, so a new horse can take its stall. */
+const activeRetired = (): boolean => !!retiredCard || raceCount >= CAREER_RACES;
+const STABLE_FULL = 'Your stable is full. Retire a horse, or open a new stall in My Stable.';
+/** Can a new horse move in (into the retired horse's stall, or an empty one)? */
+const roomForHorse = (): boolean => activeRetired() || emptySlots() > 0;
+
+function newHorse(bred?: HorseDef): string | void {
+  const foal = bred ?? makeFoal(Date.now() % 100000, allNames());
+  if (placeNewHorse(freshSave(foal), activeRetired(), save) === 'full') return STABLE_FULL;
 }
+/** Names already used in the Hall and the stable, so new foals get fresh ones. */
+const allNames = (): string[] => [...hall.map((h) => h.horse.name), ...summaries(liveSummary()).map((h) => h.name)];
+const liveSummary = () => ({ name: player.name, coat: player.coat, races: raceCount, wins: record.w, retired: activeRetired(), horse: player });
 
 function openBreeding(preselect?: string): void {
   if (!hall.length) return;
@@ -805,7 +827,10 @@ function openBreeding(preselect?: string): void {
     hall,
     preselect,
     seed: Date.now() % 100000,
+    wallet,
     onDone: async (foal, used) => {
+      if (!roomForHorse()) return STABLE_FULL;
+      if (used.premier && wallet() < PREMIER_COST) return 'Not enough Horse Dollars for the Premier Partner.';
       // Each parent from the Hall uses up one foal slot. Home-raised horses count on this ranch (3);
       // scanned-in horses count on the server across every ranch (4), so check that first.
       const cards = [used.parent, used.partnerCard].filter((c): c is RetiredCard => !!c);
@@ -819,8 +844,9 @@ function openBreeding(preselect?: string): void {
         }
       }
       for (const c of cards.filter((x) => !x.guest)) c.horse.foals = (c.horse.foals ?? 0) + 1;
+      if (used.premier) spend(PREMIER_COST);
       saveHall();
-      newHorse(foal);
+      return newHorse(foal);
     },
     onBack: () => (preselect ? retire() : renderHall()),
   });
@@ -1055,6 +1081,7 @@ function renderStable(): void {
   }
   checkFriends();
   $('st-title').textContent = `${player.name}'s stable`;
+  $('st-decor').innerHTML = decorSVG(ownedDecor());
   $('st-about-name').textContent = player.name;
   const nameplate = $('st-nameplate');
   nameplate.innerHTML = `${player.name.toUpperCase().replace(/[<>&]/g, '')}${canRename() ? PENCIL : ''}`;
@@ -1405,7 +1432,7 @@ let netDone = false;
 let lastSnapMs = 0;
 const handledRooms = new WeakSet<Room>();
 
-function openFamily(): void {
+function openFamily(mode: 'family' | 'big' = 'family', joinAsScreen?: string): void {
   lobby?.leave();
   show('family');
   lobby = runLobby($('family-root'), {
@@ -1414,7 +1441,9 @@ function openFamily(): void {
     jockey: () => jockey,
     distances: (Object.keys(DIST_INFO) as DistanceKey[]).map((k) => ({ key: k, label: DIST_INFO[k].label })),
     onStart: (room, start, members) => startFamilyRace(room, start, members),
-    onBack: () => { lobby?.leave(); lobby = null; net = null; show('pre'); },
+    onBack: () => { lobby?.leave(); lobby = null; net = null; if (fromMenu || mode === 'big') { fromMenu = false; show('menu'); } else show('pre'); },
+    mode,
+    joinAsScreen,
   });
 }
 
@@ -1500,7 +1529,7 @@ function finishFamilyRace(): void {
   showResults(race);
 }
 
-$('go-family').addEventListener('click', openFamily);
+$('go-family').addEventListener('click', () => openFamily());
 $('gift-accept').addEventListener('click', () => answerGift(true));
 $('gift-decline').addEventListener('click', () => answerGift(false));
 function renderEvent(): void {
@@ -1533,7 +1562,8 @@ $('ret-name-input').addEventListener('input', (e) => { const i = e.target as HTM
 $('ret-name-go').addEventListener('click', () => {
   if (!pendingFoal) return;
   const n = cleanName(($('ret-name-input') as HTMLInputElement).value).trim();
-  newHorse({ ...pendingFoal, name: n || pendingFoal.name });
+  const err = newHorse({ ...pendingFoal, name: n || pendingFoal.name });
+  if (err) $('ret-name-note').textContent = err;
 });
 // Rename your horse during its first 2 races; after that the name sticks.
 const NAME_LOCK_RACES = 2;
@@ -1592,7 +1622,7 @@ $('st-web').addEventListener('click', () => {
   stableMsg("Willa scurries off to work! Her new word will be ready after your next race.");
   save();
 });
-$('hall-back').addEventListener('click', () => show('stable'));
+$('hall-back').addEventListener('click', () => { if (fromMenu) { fromMenu = false; show('menu'); } else show(activeRetired() ? 'retire' : 'stable'); });
 $('card-find').addEventListener('click', () => void findCard(($('card-code') as HTMLInputElement).value));
 $('card-code').addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') void findCard(($('card-code') as HTMLInputElement).value); });
 $('card-add').addEventListener('click', () => {
@@ -1850,22 +1880,62 @@ if (sparksOf(player).length && raceCount === 0 && day === 1) {
     : `✨ A shining star! ${player.name} was born with exceptional ${sp[0]}.`), 50);
 }
 applyJockey();
-// A finished career goes straight to its ceremony.
-if (raceCount >= CAREER_RACES) retire();
-else show('stable');
+// First run with the multi-horse stable: this horse is #1 and a second starter joins it.
+initStable(
+  () => makeFoal((Date.now() + 7) % 100000, [...hall.map((h) => h.horse.name), player.name]),
+  raceCount + hall.filter((h) => !h.guest).reduce((t, h) => t + h.races, 0),
+);
+/** Back to the active horse: its retirement ceremony if its career is over, else the ranch/stable. */
+function continueGame(): void {
+  fromMenu = false;
+  if (activeRetired()) retire(); else show('stable');
+}
+homeMenu = runHome($('menu-root'), {
+  horse: () => player,
+  look: () => look,
+  jockey: () => jockey,
+  live: liveSummary,
+  summaries: () => summaries(liveSummary()),
+  hallCount: () => hall.length,
+  onContinue: continueGame,
+  onFamily: () => { fromMenu = true; openFamily('family'); },
+  onBigScreen: () => { fromMenu = true; openFamily('big'); },
+  onHall: () => { fromMenu = true; renderHall(); },
+  onIntro: () => playIntro(() => show('menu')),
+  onBackup: () => {
+    openBarn();
+    ($('backup-box') as HTMLDetailsElement).open = true;
+    renderBackup();
+    setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100);
+  },
+  onSwitch: (id) => switchTo(id, save),
+  onNewHorse: (kind) => {
+    if (!roomForHorse()) return STABLE_FULL;
+    if (kind === 'breed') { fromMenu = true; openBreeding(); return; }
+    return newHorse();
+  },
+});
+// After switching horses the page reloads straight into that horse's stable.
+const nextScreen = takeNextScreen();
+if (nextScreen) continueGame();
+else show('menu');
 // Links from a card's QR (?card=) or a backup QR (?restore=).
 {
   const q = new URLSearchParams(location.search);
   const card = q.get('card');
   const rest = q.get('restore');
-  if (card || rest) history.replaceState(null, '', location.pathname + (q.has('local') ? '?local' : ''));
+  const bigScreen = q.get('screen');
+  if (card || rest || bigScreen) history.replaceState(null, '', location.pathname + (q.has('local') ? '?local' : ''));
+  if (bigScreen) openFamily('big', bigScreen);
   if (card) { renderHall(); ($('card-code') as HTMLInputElement).value = card; void findCard(card); }
   else if (rest) { openBarn(); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
 }
-// Opening sequence. Tapping the title card is where the main menu will go; for now it
-// drops straight into the game.
-if (shouldPlayIntro()) {
+// Opening sequence on every launch (Skip button), then the home menu.
+if (!nextScreen && shouldPlayIntro()) {
   sceneAmb.set(null); // keep the barn ambience out of the score
-  playIntro(() => show((document.body.dataset.screen as Screen) || 'stable'));
+  playIntro(() => show((document.body.dataset.screen as Screen) || 'menu'));
 }
+// Home buttons in the barn and on the ranch.
+$('st-home').addEventListener('click', () => show('menu'));
+$('rn-home').addEventListener('click', () => show('menu'));
 setTimeout(() => { void backupNow(); void shareCards(); }, 2500);

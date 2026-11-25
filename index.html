@@ -20,6 +20,7 @@
         </div>
       </div>
       <div class="rn-btns">
+        <button class="rn-btn" id="rn-home">⌂ Home</button>
         <button class="rn-btn" id="rn-barn">☰ Barn</button>
         <button class="rn-btn go" id="rn-race">🏁 Race</button>
         <button class="rn-btn rn-sound" id="rn-sound" aria-label="Turn sound off">🔊</button>
@@ -33,8 +34,10 @@
     </div>
   </section>
 
+  <section id="menu" class="screen" aria-label="Home menu"><div id="menu-root" class="hm"></div></section>
+
   <section id="stable" class="screen" aria-label="Stable">
-    <button class="ghost small back" id="st-to-ranch">← Out to the ranch</button>
+    <div class="st-topbtns"><button class="ghost small back" id="st-to-ranch">← Out to the ranch</button><button class="ghost small" id="st-home">⌂ Home</button></div>
     <header class="st-head">
       <div>
         <div class="eyebrow">Horse Champions Derby</div>
@@ -63,6 +66,7 @@
         <circle cx="330" cy="40" r="12" fill="#FFD23F" stroke="#2B2118" stroke-width="3"/>
         <line x1="330" y1="0" x2="330" y2="28" stroke="#2B2118" stroke-width="2"/>
       </svg>
+      <div class="st-decor-wrap" id="st-decor"></div>
       <div class="st-web" id="st-web" hidden></div>
       <button class="st-nameplate" id="st-nameplate" aria-label="Rename your horse">GALE RUNNER</button>
       <div class="st-horse" id="st-horse"></div>
@@ -174,6 +178,7 @@
     <div class="card ret-name" id="ret-name-box" hidden>
       <div class="card-title">Name your new horse</div>
       <div class="rename-row"><input id="ret-name-input" maxlength="18" autocomplete="off" spellcheck="false" aria-label="New horse name"><button class="big go" id="ret-name-go">Start career</button></div>
+      <p class="muted" id="ret-name-note"></p>
     </div>
     <p class="muted ret-note">Your card is in the Hall of Fame. Share its code, or let someone scan the QR with their phone camera, to add this horse to their Hall of Fame too.</p>
   </section>
@@ -361,6 +366,7 @@
       <div class="eyebrow">Official result</div>
       <h2 id="res-title">You finished 3rd</h2>
       <p id="res-sub" class="sub"></p>
+      <div class="res-prize" id="res-prize" hidden></div>
     </div>
     <ol class="res-list" id="res-list"></ol>
     <div class="card gift-card" id="gift-card" hidden>
