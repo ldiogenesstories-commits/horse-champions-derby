@@ -1669,25 +1669,63 @@ $('rn-race').addEventListener('click', () => $('go-race').click());
 $('st-to-ranch').addEventListener('click', () => { home = 'ranch'; show('ranch'); });
 $('rn-mode').addEventListener('click', () => setSteering(!ranch?.tapMode));
 {
-  // Thumb stick.
+  // Floating thumb stick: touch down anywhere on the open field (either thumb) and
+  // the stick jumps under your finger and steers from there. When you let go it
+  // slides back to its resting spot in the corner as a hint.
+  const stage = $('rn-stage');
   const stick = $('rn-stick');
   const knob = stick.querySelector('i') as HTMLElement;
+  const DEAD = 0.1; // ignore tiny wobbles near the centre
   let id: number | null = null;
+  let cx = 0;
+  let cy = 0;
   const move = (e: PointerEvent) => {
-    const r = stick.getBoundingClientRect();
-    let dx = e.clientX - (r.left + r.width / 2);
-    let dy = e.clientY - (r.top + r.height / 2);
-    const max = r.width / 2 - 8;
+    const max = stick.offsetWidth / 2 - 8;
+    let dx = e.clientX - cx;
+    let dy = e.clientY - cy;
     const d = Math.hypot(dx, dy);
     if (d > max) { dx = (dx / d) * max; dy = (dy / d) * max; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    ranch?.setStick(dx / max, dy / max);
+    const m = Math.min(d, max) / max;
+    if (m < DEAD) { ranch?.setStick(0, 0); return; }
+    const s = (m - DEAD) / (1 - DEAD) / m; // rescale so just past the dead zone starts from zero
+    ranch?.setStick((dx / max) * s, (dy / max) * s);
   };
-  stick.addEventListener('pointerdown', (e) => { id = e.pointerId; stick.setPointerCapture(e.pointerId); move(e); });
-  stick.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
-  const end = (e: PointerEvent) => { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; ranch?.setStick(0, 0); };
-  stick.addEventListener('pointerup', end);
-  stick.addEventListener('pointercancel', end);
+  // Touches that start on a button, panel or sheet belong to that control, not the stick.
+  const onControl = (t: EventTarget | null) =>
+    t instanceof Element && !!t.closest('button, a, input, select, .rn-hud, .rn-btns, .rn-sheet, .rn-toast, .rn-use, .rn-mode');
+  stage.addEventListener('pointerdown', (e) => {
+    if (id !== null || !ranch || ranch.tapMode || !onRanch() || !$('rn-sheet').hidden) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (onControl(e.target)) return;
+    e.preventDefault();
+    id = e.pointerId;
+    stage.setPointerCapture(e.pointerId);
+    const sr = stage.getBoundingClientRect();
+    const half = stick.offsetWidth / 2;
+    // Keep the whole stick on screen even if the touch is right at an edge.
+    const x = Math.max(half, Math.min(sr.width - half, e.clientX - sr.left));
+    const y = Math.max(half, Math.min(sr.height - half, e.clientY - sr.top));
+    cx = sr.left + x;
+    cy = sr.top + y;
+    stick.style.left = `${x - half}px`;
+    stick.style.top = `${y - half}px`;
+    stick.style.bottom = 'auto';
+    stick.classList.add('live');
+    move(e);
+  });
+  stage.addEventListener('pointermove', (e) => { if (e.pointerId === id) move(e); });
+  const end = (e: PointerEvent) => {
+    if (e.pointerId !== id) return;
+    id = null;
+    knob.style.transform = '';
+    stick.classList.remove('live');
+    stick.style.left = stick.style.top = stick.style.bottom = '';
+    ranch?.setStick(0, 0);
+  };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+  stage.addEventListener('lostpointercapture', end);
 }
 
 load();
