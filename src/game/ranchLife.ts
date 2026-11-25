@@ -44,6 +44,7 @@ interface Critter {
   color: string;
   cool: number; // seconds before it will follow / react again
   slot: number; // for the duck line / circling angle
+  stay: number; // wild visitors: seconds until they head off
 }
 
 const BOUNDS = { x0: 90, x1: 2310, y0: 95, y1: 850 };
@@ -60,15 +61,44 @@ export class RanchLife {
   private fireflies = Array.from({ length: 22 }, () => ({ x: rnd(1150, 1850), y: rnd(250, 800), z: rnd(20, 90), p: Math.random() * 6 }));
   /** Time of day 0 (sunrise) .. 1 (golden evening); the owl comes out late. */
   tod = 0;
+  /** Seconds until the next wild visit (the first one comes along fairly soon). */
+  private nextVisit = rnd(8, 15);
+  private view = { x0: 0, x1: 1000 };
 
   constructor(
     private toast: (text: string) => void,
     private horseName: () => string,
   ) {
-    for (let i = 0; i < 6; i++) this.add('butterfly', { x: rnd(300, 2200), y: rnd(250, 820) });
-    for (let i = 0; i < 3; i++) this.add('rabbit', { x: rnd(400, 2200), y: rnd(450, 830) });
-    for (let i = 0; i < 4; i++) this.add('bird', { x: rnd(400, 2200), y: rnd(200, 800) });
   }
+
+  /** Tell the critters what part of the pasture is on screen (visitors arrive in view). */
+  setView(x0: number, x1: number): void { this.view = { x0, x1 }; }
+
+  /** A pleasant visit now and then: a few butterflies, a pair of songbirds, or a rabbit. */
+  private visit(): void {
+    const roll = Math.random();
+    const kind: Wild = roll < 0.4 ? 'butterfly' : roll < 0.75 ? 'bird' : 'rabbit';
+    const n = kind === 'butterfly' ? 2 + Math.floor(Math.random() * 2) : kind === 'bird' ? 2 : 1;
+    const span = this.view.x1 - this.view.x0;
+    const cx = clampX(this.view.x0 + span * rnd(0.2, 0.8));
+    const cy = rnd(260, 800);
+    for (let i = 0; i < n; i++) {
+      this.add(kind, { x: cx + rnd(-90, 90), y: clampY(cy + rnd(-60, 60)) });
+      const c = this.list[this.list.length - 1];
+      c.stay = rnd(35, 70);
+      if (kind === 'bird') c.z = rnd(220, 320); // flutter down from the sky
+      if (kind === 'butterfly') c.z = rnd(110, 160);
+      if (kind === 'rabbit') { // hop in from the nearer screen edge
+        const fromLeft = cx - this.view.x0 < this.view.x1 - cx;
+        c.vx = c.x; c.vy = c.y;
+        c.x = fromLeft ? this.view.x0 - 60 : this.view.x1 + 60; c.state = 'wander'; c.t = 4;
+      }
+    }
+    if (kind !== 'rabbit') critterSound(kind);
+  }
+
+  /** Wild visitors still out on the pasture. */
+  get visitors(): number { return this.list.filter((c) => isWild(c.kind)).length; }
 
   /** Which barn friends are unlocked (the spider stays home in her web). */
   setFriends(ids: FriendId[]): void {
@@ -90,7 +120,7 @@ export class RanchLife {
       kind, x: at.x + rnd(-40, 40), y: at.y + rnd(-30, 30), z: kind === 'butterfly' ? rnd(20, 50) : 0,
       vx: 0, vy: 0, vz: 0, home: { ...at }, state: 'idle', t: rnd(0.5, 3), dir: Math.random() < 0.5 ? 1 : -1,
       phase: Math.random() * 10, color: kind === 'butterfly' ? BUTTERFLY_COLORS[Math.floor(Math.random() * 5)] : BIRD_COLORS[Math.floor(Math.random() * 4)],
-      cool: 0, slot: this.list.filter((c) => c.kind === kind).length,
+      cool: 0, slot: this.list.filter((c) => c.kind === kind).length, stay: Infinity,
     });
   }
 
@@ -110,7 +140,13 @@ export class RanchLife {
   // ---------- simulation ----------
   update(dt: number, h: HorseView): { goTo?: { x: number; y: number } } {
     let goTo: { x: number; y: number } | undefined;
+    // Visits: only one group at a time, with a quiet spell in between.
+    if (this.visitors === 0) { this.nextVisit -= dt; if (this.nextVisit <= 0) { this.visit(); this.nextVisit = rnd(30, 75); } }
     for (const c of this.list) {
+      if (isWild(c.kind) && c.state !== 'play' && c !== this.engaged) {
+        c.stay -= dt;
+        if (c.stay <= 0 && c.state !== 'flee' && c.state !== 'gone') { this.leave(c); continue; }
+      }
       c.phase += dt;
       c.cool = Math.max(0, c.cool - dt);
       c.t -= dt;
@@ -133,18 +169,18 @@ export class RanchLife {
       switch (c.state) {
         case 'play': this.stepPlay(c, h, dt); break;
         case 'gone':
-          if (c.t <= 0) { // a fresh one drifts back in somewhere else
-            c.x = rnd(300, 2200); c.y = rnd(220, 820); c.state = 'idle'; c.t = rnd(1, 3);
-            c.z = c.kind === 'bird' ? 260 : c.kind === 'butterfly' ? 120 : 0;
-          }
-          break;
+          break; // flew off: removed below
         case 'flee':
           c.x += c.vx * dt; c.y += c.vy * dt; c.z = Math.max(0, c.z + c.vz * dt);
           if (c.kind === 'rabbit') c.z = Math.abs(Math.sin(c.phase * 9)) * 16;
-          if (c.kind === 'bird' && c.z > 420) { c.state = 'gone'; c.t = rnd(6, 14); }
-          if (c.kind === 'butterfly' && c.z > 160) { c.state = 'gone'; c.t = rnd(4, 10); }
-          if (c.t <= 0) { c.state = 'idle'; c.t = rnd(1, 3); }
-          c.x = clampX(c.x); c.y = clampY(c.y);
+          if (c.kind === 'bird' && c.z > 420) c.state = 'gone';
+          if (c.kind === 'butterfly' && c.z > 160) c.state = 'gone';
+          if (c.kind === 'rabbit' && (c.x < this.view.x0 - 80 || c.x > this.view.x1 + 80 || c.x <= BOUNDS.x0 || c.x >= BOUNDS.x1)) c.state = 'gone';
+          if (c.state === 'flee' && c.t <= 0) {
+            if (c.stay <= 0) c.state = 'gone'; // was leaving anyway
+            else { c.state = 'idle'; c.t = rnd(1, 3); }
+          }
+          if (c.kind !== 'rabbit') { c.x = clampX(c.x); c.y = clampY(c.y); }
           break;
         case 'follow': {
           // Trot along behind the horse (ducks keep a little line).
@@ -167,6 +203,7 @@ export class RanchLife {
         }
       }
     }
+    this.list = this.list.filter((c) => c.state !== 'gone');
     if (this.engaged && this.engaged.state !== 'play') goTo = { x: this.engaged.x, y: this.engaged.y };
     return { goTo };
   }
@@ -207,6 +244,15 @@ export class RanchLife {
     }
   }
 
+  /** Time to go: birds and butterflies fly off, a rabbit hops away out of view. */
+  private leave(c: Critter): void {
+    const right = c.x > (this.view.x0 + this.view.x1) / 2;
+    const sp = c.kind === 'rabbit' ? 170 : c.kind === 'bird' ? 200 : 90;
+    c.vx = (right ? 1 : -1) * sp; c.vy = rnd(-20, 20);
+    c.vz = c.kind === 'bird' ? 170 : c.kind === 'butterfly' ? 35 : 0;
+    c.dir = right ? 1 : -1; c.state = 'flee'; c.t = 12; c.stay = 0;
+  }
+
   private flee(c: Critter, h: HorseView): void {
     const dx = c.x - h.x || 1; const dy = c.y - h.y; const d = Math.hypot(dx, dy) || 1;
     const sp = c.kind === 'rabbit' ? 320 : c.kind === 'bird' ? 260 : 170;
@@ -214,6 +260,7 @@ export class RanchLife {
     c.vz = c.kind === 'bird' ? 220 : c.kind === 'butterfly' ? 60 : 0;
     c.dir = c.vx > 0 ? 1 : -1;
     c.state = 'flee'; c.t = c.kind === 'rabbit' ? 0.9 : 3;
+    c.stay = Math.min(c.stay, rnd(4, 12)); // spooked visitors don't hang around long
     if (c.kind !== 'butterfly') critterSound(c.kind);
   }
 
@@ -282,7 +329,7 @@ export class RanchLife {
       c.dir = -Math.sin(c.slot) > 0 ? 1 : -1;
     }
     if (c.t <= 0) {
-      if (isWild(c.kind)) this.flee(c, h);
+      if (isWild(c.kind)) { this.flee(c, h); c.stay = 0; }
       else { c.state = 'wander'; c.t = 3; c.cool = 8; c.vx = c.home.x; c.vy = c.home.y; c.z = 0; }
     }
   }

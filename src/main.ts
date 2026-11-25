@@ -11,7 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { RaceAmbience, bugle, gateBell, isMuted, setMuted, unlockAudio } from './game/sfx';
+import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio } from './game/sfx';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -130,6 +130,8 @@ let pendingScreen: Screen | null = null;
 let finishSplashed = false;
 /** Crowd + hoofbeats for races on phones (the TV broadcast runs its own). */
 const raceAmb = new RaceAmbience();
+/** Background life for the ranch and the barn. */
+const sceneAmb = new SceneAmbience();
 function show(id: Screen): void {
   if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
   // A transition is already covering the screen: just retarget where it lands.
@@ -148,6 +150,8 @@ function showNow(id: Screen): void {
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
   document.body.dataset.screen = id; // lets the mute button find a free corner per screen
   if (id !== 'race') raceAmb.stop();
+  sceneAmb.friends = friends.filter((f) => f !== 'spider');
+  sceneAmb.set(id === 'ranch' ? 'ranch' : id === 'stable' ? 'barn' : null);
   if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
 }
@@ -1647,6 +1651,7 @@ function ranchToast(text: string, warn = false): void {
 function renderRanchHud(): void {
   // The sky follows the day: sunrise with all actions left, golden evening with none.
   ranch?.setTimeOfDay((ACTIONS_PER_DAY - actionsLeft) / ACTIONS_PER_DAY);
+  sceneAmb.tod = (ACTIONS_PER_DAY - actionsLeft) / ACTIONS_PER_DAY;
   ranch?.setFriends(friends);
   $('rn-name').textContent = player.name;
   const ev = eventToday();
@@ -1666,6 +1671,7 @@ function enterRanch(): void {
       },
       onGait: (g) => { $('rn-gait').textContent = GAIT_LABEL[g]; },
       onToast: (t) => ranchToast(t),
+      onHoof: (g) => hoofClop(g),
     });
     setSteering(localStorage.getItem('hcd-ranch-tap') === '1');
     (window as unknown as { __ranch: Ranch }).__ranch = ranch; // handy for testing in the console

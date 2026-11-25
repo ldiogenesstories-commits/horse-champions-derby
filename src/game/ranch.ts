@@ -62,6 +62,8 @@ export interface RanchHooks {
   onGait?(g: Gait): void;
   /** A short caption (critters playing with your horse). */
   onToast?(text: string): void;
+  /** A hoof hit the ground (for footstep sounds). */
+  onHoof?(gait: Gait): void;
 }
 
 // Sky through the day: sunrise, late morning, afternoon, golden evening (top, horizon).
@@ -128,6 +130,8 @@ export class Ranch {
   private hooks: RanchHooks;
   private life: RanchLife;
   private horseName = 'your horse';
+  /** Current time of day (0 sunrise … 1 evening), eased. */
+  get timeOfDay(): number { return this.tod; }
   private tod = 0; // time of day shown (eases toward todTarget)
   private todTarget = 0;
 
@@ -391,7 +395,9 @@ export class Ranch {
     const actual = moved / Math.max(dt, 1e-4);
     const gait: Gait = actual < 12 ? 'stand' : actual < 130 ? 'walk' : actual < 240 ? 'trot' : 'canter';
     if (gait !== this.gait) { this.gait = gait; this.hooks.onGait?.(gait); }
+    const prevBeat = Math.floor(this.phase * 2);
     this.phase = (this.phase + moved / STRIDE[gait === 'stand' ? 'walk' : gait]) % 1;
+    if (gait !== 'stand' && Math.floor(this.phase * 2) !== prevBeat) this.hooks.onHoof?.(gait);
     // Which way the paper horse faces (screen space: depth is squashed).
     if (actual > 12) {
       const sx = vx || Math.cos(this.heading); const sy = (vy || Math.sin(this.heading)) * TILT;
@@ -437,6 +443,7 @@ export class Ranch {
     this.camInit = true;
     this.camX += (tx - this.camX) * ease;
     this.camY += (ty - this.camY) * ease;
+    this.life.setView(this.camX, this.camX + viewW);
     const g = this.g;
     g.setTransform(dpr * this.k, 0, 0, dpr * this.k, -this.camX * dpr * this.k, -this.camY * dpr * this.k);
     this.drawWorld(g, now / 1000, dt, viewW, viewH);
