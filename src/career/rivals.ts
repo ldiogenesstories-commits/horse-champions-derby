@@ -24,10 +24,15 @@ export const RIVALS: Rival[] = [
   { id: 'wren', name: 'Whirlwind Wren', tagline: 'A blur over short trips. Nimble as a bird.', style: 'front', dist: 'sprint', coat: 'chestnut', color: '#D96C2C', skew: { speed: 4, agility: 6, stamina: -6 } },
 ];
 
+/** Rivals' stats sit this far below the top of the race's rival range (before their skews). */
+export const RIVAL_BELOW_TOP = 7;
+/** Rivals peak here (before skews), so even Grand Prix rivals can be beaten. */
+export const RIVAL_TOP_CAP = 96;
+
 /** A rival at a given strength: stats near the top of the race's rival range. */
 export function rivalHorse(r: Rival, range: [number, number], seed: number, number: number): HorseDef {
   const rng = makeRng(seed);
-  const base = range[1] - 4;
+  const base = Math.min(range[1], RIVAL_TOP_CAP) - RIVAL_BELOW_TOP;
   const stat = (k: keyof HorseDef['stats']) => Math.max(35, Math.min(99, Math.round(base + (r.skew[k] ?? 0) + (rng() - 0.5) * 6)));
   return {
     id: `rival-${r.id}`, number, name: r.name, color: r.color,

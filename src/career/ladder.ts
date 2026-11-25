@@ -56,10 +56,21 @@ export function recordFinish(log: CareerLog, place: number, o: { points?: number
   return CLASSES[i + 1].name;
 }
 
+/** How much stronger a big race's field is than your current class. */
+export const BIG_RACE_BUMP = 2;
+/** Big-race fields never get stronger than this, so the best horses can still win them. */
+export const BIG_RACE_CAP: [number, number] = [74, 94];
+
 /** What kind of race this is: a regular class race, one class up, or a big race. */
 export interface RaceTerms { rivals: [number, number]; prize: number; points: number; fee: number; winsWorth: number; winBonus: number; label: string }
 export function termsFor(log: CareerLog, o: { up?: boolean; big?: import('./bigRaces').BigRace | null } = {}): RaceTerms {
-  if (o.big) return { rivals: o.big.rivals, prize: o.big.prize, points: o.big.points, fee: o.big.fee, winsWorth: 2, winBonus: o.big.winBonus, label: o.big.name };
+  if (o.big) {
+    // Always tougher than your own class: about one class up, and never below the race's floor.
+    const c = CLASSES[classOf(log)];
+    // The cap keeps top-class fields winnable, but a big race is never easier than your own class.
+    const rivals: [number, number] = [Math.max(c.rivals[0], Math.min(BIG_RACE_CAP[0], Math.max(o.big.rivals[0], c.rivals[0] + BIG_RACE_BUMP))), Math.max(c.rivals[1], Math.min(BIG_RACE_CAP[1], Math.max(o.big.rivals[1], c.rivals[1] + BIG_RACE_BUMP)))];
+    return { rivals, prize: o.big.prize, points: o.big.points, fee: o.big.fee, winsWorth: 2, winBonus: o.big.winBonus, label: o.big.name };
+  }
   const i = classOf(log);
   const c = CLASSES[Math.min(CLASSES.length - 1, i + (o.up ? 1 : 0))];
   return { rivals: c.rivals, prize: c.prize, points: c.points, fee: c.fee, winsWorth: o.up ? 2 : 1, winBonus: 0, label: `${c.name}${o.up ? ' (entered up)' : ''}` };
