@@ -367,6 +367,7 @@ button.small { height: 36px; font-size: 13px; padding: 0 12px; border-radius: 10
 .gr-stage.working { touch-action: none; box-shadow: 0 0 0 4px var(--flash); }
 .gr-stage svg { display: block; width: 100%; height: auto; }
 .gr-art { position: relative; }
+.jr-art { display: block; width: 100%; height: auto; aspect-ratio: 320 / 290; }
 .gr-art img { display: block; width: 100%; height: auto; aspect-ratio: 320 / 290; }
 .gr-art svg { position: absolute; inset: 0; height: 100%; }
 .gr-art img:not([src]) { visibility: hidden; }
