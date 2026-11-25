@@ -22,7 +22,9 @@ const NEW_CAREER = (): CareerLog => ({ eventWins: [] as string[], crowdGifts: 0,
 const careerPoints = (_r: { w: number; p: number; s: number }, log: CareerLog) => Math.round(log.ladderPts ?? 0) + log.eventWins.length * 12;
 const rankFor = (p: number) => (p >= 300 ? 'Legend' : p >= 210 ? 'Champion' : p >= 130 ? 'Star' : p >= 60 ? 'Contender' : 'Fan Favourite');
 import type { CareerLog } from '../src/career/career';
-import { CLASSES, classOf, recordFinish } from '../src/career/ladder';
+import { recordFinish, termsFor } from '../src/career/ladder';
+import { bigRaceOn } from '../src/career/bigRaces';
+import { addRivals, recordRivals, rivalsFor } from '../src/career/rivals';
 import { arcOf, CAREER_WEEKS, DECLINE_EVERY, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, type Arc } from '../src/sim/arc';
 import { prizeFor } from '../src/profile/profile';
 import type { HorseDef } from '../src/sim/types';
@@ -55,13 +57,19 @@ function racesThisWeek(s: Strategy, week: number, races: number): boolean {
 }
 
 export interface Result {
-  name: string; strategy: Strategy; arc: Arc; topClass: string; gpWins: number; weeks: number; races: number;
+  name: string; strategy: Strategy; arc: Arc; topClass: string; gpWins: number; bigRaces: number; bigWins: number; rivalRec: string; weeks: number; races: number;
   w: number; p: number; s: number; points: number; rank: string; prize: number;
   startTotal: number; bestTotal: number; bestWeek: number; finalTotal: number; declined: number;
   firstRaceTotal: number; winsFirstHalf: number; winsSecondHalf: number; events: number;
   log: string[];
+  horse?: HorseDef;
+  career?: CareerLog;
+  /** Stat total and career points at the end of each week. */
+  statsByWeek: number[];
+  pointsByWeek: number[];
 }
 
+export type { Strategy };
 export function playCareer(foal: HorseDef, strategy: Strategy, name: string, seed: number): Result {
   const h: HorseDef = structuredClone({ ...foal, name });
   const rng = makeRng(seed);
@@ -71,9 +79,12 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
   const rec = { w: 0, p: 0, s: 0 };
   const career = NEW_CAREER();
   const startTotal = total();
+  let bigRaces = 0, bigWins = 0;
   let bestTotal = startTotal, bestWeek = 1, firstRaceTotal = 0, winsFirstHalf = 0, winsSecondHalf = 0, events = 0;
   const log: string[] = [];
   const peak = PEAK_WEEK[arcOf(h)];
+  const statsByWeek: number[] = [];
+  const pointsByWeek: number[] = [];
 
   const grow = (k: StatKey, gain: number) => {
     const room = potentialOf(h, k) - h.stats[k];
@@ -115,10 +126,15 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
     }
     if (raceWeek) {
       if (!firstRaceTotal) firstRaceTotal = total();
-      const event = week % 3 === 0;
-      const distKey = (h.distancePref ?? 'mile') as keyof typeof DISTANCES;
-      const cls = CLASSES[classOf(career)];
-      const field = makeField(seed * 97 + week, h, { ...PLAN_FOR_STYLE[h.style] }, true, confidence, 8, confCap, undefined, cls.rivals);
+      // Everyone who races in a big-race week enters it.
+      const big = bigRaceOn(week);
+      const event = week % 3 === 0 && !big;
+      const t = termsFor(career, { big });
+      const distKey = (big ? big.dist : h.distancePref ?? 'mile') as keyof typeof DISTANCES;
+      const fseed = seed * 97 + week;
+      const field = addRivals(makeField(fseed, h, { ...PLAN_FOR_STYLE[h.style] }, true, confidence, 8, confCap, undefined, t.rivals), rivalsFor(fseed, !!big), t.rivals, fseed * 3 + week);
+      prize -= Math.min(t.fee, Math.max(0, prize));
+      if (big) bigRaces++;
       const me = field.find((e) => e.isPlayer)!;
       me.startEnergy = Math.round(100 - Math.max(0, fatigue - 40) * 0.5 - (fed ? 0 : 5));
       const race = new Race(field, seed * 31 + races, undefined, DISTANCES[distKey]);
@@ -128,8 +144,10 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
       races++;
       if (!career.distances.includes(distKey)) career.distances.push(distKey);
       career.bestPlace = Math.min(career.bestPlace, p.place);
-      const pz = Math.round(prizeFor(p.place, event) * cls.prize);
-      const up = recordFinish(career, p.place);
+      const pz = Math.round(prizeFor(p.place, event) * t.prize);
+      const up = recordFinish(career, p.place, { points: t.points, winBonus: t.winBonus, winsWorth: t.winsWorth });
+      if (big && p.place === 1) { bigWins++; (career.bigWins ??= []).push(big.name); }
+      recordRivals(career, p.place, race.standings().filter((x) => x.def.id.startsWith('rival-')).map((x) => ({ id: x.def.id, place: x.place })));
       if (up) log.push(`→ ${up} at race ${races}`);
       prize += pz;
       if (event) events++;
@@ -154,19 +172,23 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
       const hit = Math.min(step, 15 - rustApplied);
       if (hit > 0) { confidence = Math.max(0, confidence - hit); rustApplied += hit; }
     }
+    statsByWeek.push(total());
+    pointsByWeek.push(careerPoints(rec, career));
     week++;
     weekPassed();
     if (total() > bestTotal) { bestTotal = total(); bestWeek = week; }
   }
   const points = careerPoints(rec, career);
   return {
-    name, strategy, arc: arcOf(h), topClass: CLASSES[career.topClass ?? 0].name, gpWins: career.gpWins ?? 0, weeks: week - 1, races, ...rec, points, rank: rankFor(points), prize,
+    name, strategy, arc: arcOf(h), topClass: ['Maiden', 'Novice', 'Graded', 'Stakes', 'Grand Prix'][career.topClass ?? 0], gpWins: career.gpWins ?? 0, bigRaces, bigWins,
+    rivalRec: Object.entries(career.rivals ?? {}).map(([k, v]) => `${k} ${v.beat}-${v.lost}`).join(', '), weeks: week - 1, races, ...rec, points, rank: rankFor(points), prize,
     startTotal, bestTotal, bestWeek, finalTotal: total(), declined, firstRaceTotal, winsFirstHalf, winsSecondHalf, events, log,
+    horse: h, career, statsByWeek, pointsByWeek,
   };
 }
 
 /** A starter foal bred from the visiting horses (as a new player would). */
-function starterFoal(seed: number, arc?: Arc): HorseDef {
+export function starterFoal(seed: number, arc?: Arc): HorseDef {
   const mare = visitingPartners(seed + 101, 'mare')[0].horse;
   const stallion = visitingPartners(seed, 'stallion')[1].horse;
   const f = breedFoal(mare, stallion, 'Foal', seed + 7);
@@ -175,24 +197,32 @@ function starterFoal(seed: number, arc?: Arc): HorseDef {
 }
 
 // ---------------- run ----------------
+if (process.argv[1]?.endsWith('playthrough.ts')) await runReport();
+async function runReport(): Promise<void> {
 const STRATS: [Strategy, string, string][] = [
   ['racer', 'Rocket Rally', 'Straight to racing'],
   ['average', 'Midnight Meridian', 'Average player'],
   ['grinder', 'Copper Crescendo', 'Some stat grinding'],
   ['maxer', 'Sovereign Zenith', 'Train 25 weeks, then race'],
 ];
-const fmt = (r: Result) => `${r.name.padEnd(18)} ${r.arc.padEnd(6)} top ${r.topClass} (GP wins ${r.gpWins}) wk ${String(r.weeks).padStart(2)} · ${String(r.races).padStart(2)} races · ${r.w}-${r.p}-${r.s} · ${String(r.points).padStart(3)} pts ${r.rank.padEnd(13)} · ħ${String(r.prize).padStart(5)} · stats ${Math.round(r.startTotal)}→1st race ${Math.round(r.firstRaceTotal)}→best ${Math.round(r.bestTotal)} (wk ${r.bestWeek})→final ${Math.round(r.finalTotal)} · decline -${r.declined} · wins 1st/2nd half ${r.winsFirstHalf}/${r.winsSecondHalf}`;
+const fmt = (r: Result) => `${r.name.padEnd(18)} ${r.arc.padEnd(6)} top ${r.topClass} (GP wins ${r.gpWins}) big ${r.bigWins}/${r.bigRaces} [${r.rivalRec}] wk ${String(r.weeks).padStart(2)} · ${String(r.races).padStart(2)} races · ${r.w}-${r.p}-${r.s} · ${String(r.points).padStart(3)} pts ${r.rank.padEnd(13)} · ħ${String(r.prize).padStart(5)} · stats ${Math.round(r.startTotal)}→1st race ${Math.round(r.firstRaceTotal)}→best ${Math.round(r.bestTotal)} (wk ${r.bestWeek})→final ${Math.round(r.finalTotal)} · decline -${r.declined} · wins 1st/2nd half ${r.winsFirstHalf}/${r.winsSecondHalf}`;
 
 const FOAL_SEED = Number(process.argv[2] ?? 4242);
 console.log('=== The four named horses (same foal, steady arc) ===');
 const foal = starterFoal(FOAL_SEED, 'steady');
 console.log(`Foal: ${foal.distancePref} type, ${foal.style}, stats ${Math.round(STAT_KEYS.reduce((t, k) => t + foal.stats[k], 0))}, peaks ${Math.round(STAT_KEYS.reduce((t, k) => t + potentialOf(foal, k), 0))}`);
+const named: Result[] = [];
 for (const [s, n] of STRATS) {
   const r = playCareer(foal, s, n, 7000);
+  named.push(r);
   console.log(fmt(r));
   console.log('   ' + r.log.join(' | '));
 }
 
+if (process.env.CARDS_OUT) {
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(process.env.CARDS_OUT, JSON.stringify(named.map(({ horse, career, w, p, s, races, points, rank }) => ({ horse, career, record: { w, p, s }, races, points, rank }))));
+}
 const N = Number(process.argv[3] ?? 150);
 console.log(`\n=== Averages over ${N} foals x 3 arcs per strategy ===`);
 for (const [s, , label] of STRATS) {
@@ -202,6 +232,7 @@ for (const [s, , label] of STRATS) {
     const avg = (f: (r: Result) => number) => rs.reduce((t, r) => t + f(r), 0) / rs.length;
     const ranks: Record<string, number> = {};
     for (const r of rs) ranks[r.rank] = (ranks[r.rank] ?? 0) + 1;
-    console.log(`${label.padEnd(26)} ${arc.padEnd(6)} weeks ${avg((r) => r.weeks).toFixed(1)} · races ${avg((r) => r.races).toFixed(1)} · wins ${avg((r) => r.w).toFixed(1)} · top3 ${avg((r) => r.w + r.p + r.s).toFixed(1)} · pts ${avg((r) => r.points).toFixed(0)} · ħ${avg((r) => r.prize).toFixed(0)} · 1st-race stats ${avg((r) => r.firstRaceTotal).toFixed(0)} · best ${avg((r) => r.bestTotal).toFixed(0)} · final ${avg((r) => r.finalTotal).toFixed(0)} · decline ${avg((r) => r.declined).toFixed(1)} · reached GP ${Math.round(100 * rs.filter((r) => r.topClass === 'Grand Prix').length / rs.length)}% · GP wins ${avg((r) => r.gpWins).toFixed(1)} · ranks ${Object.entries(ranks).map(([k, v]) => `${k} ${Math.round((100 * v) / rs.length)}%`).join(', ')}`);
+    console.log(`${label.padEnd(26)} ${arc.padEnd(6)} weeks ${avg((r) => r.weeks).toFixed(1)} · races ${avg((r) => r.races).toFixed(1)} · wins ${avg((r) => r.w).toFixed(1)} · top3 ${avg((r) => r.w + r.p + r.s).toFixed(1)} · pts ${avg((r) => r.points).toFixed(0)} · ħ${avg((r) => r.prize).toFixed(0)} · 1st-race stats ${avg((r) => r.firstRaceTotal).toFixed(0)} · best ${avg((r) => r.bestTotal).toFixed(0)} · final ${avg((r) => r.finalTotal).toFixed(0)} · decline ${avg((r) => r.declined).toFixed(1)} · big wins ${avg((r) => r.bigWins).toFixed(2)}/${avg((r) => r.bigRaces).toFixed(1)} · reached GP ${Math.round(100 * rs.filter((r) => r.topClass === 'Grand Prix').length / rs.length)}% · GP wins ${avg((r) => r.gpWins).toFixed(1)} · ranks ${Object.entries(ranks).map(([k, v]) => `${k} ${Math.round((100 * v) / rs.length)}%`).join(', ')}`);
   }
+}
 }

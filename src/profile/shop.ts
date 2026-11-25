@@ -3,7 +3,7 @@
 import type { SilksPattern } from '../game/jockey';
 import { owns } from './profile';
 
-export type ShopKind = 'bow' | 'pad' | 'silks' | 'decor';
+export type ShopKind = 'bow' | 'pad' | 'silks' | 'decor' | 'facility';
 export interface ShopItem { id: string; kind: ShopKind; label: string; price: number; value: string; blurb?: string }
 
 export const SHOP_SECTIONS: { kind: ShopKind; title: string; note: string }[] = [
@@ -11,6 +11,7 @@ export const SHOP_SECTIONS: { kind: ShopKind; title: string; note: string }[] = 
   { kind: 'pad', title: 'Tack: saddle pads', note: 'Saddle pad colors (Grooming → Extras → Saddle pad).' },
   { kind: 'silks', title: 'Silks patterns', note: 'New patterns for your racing silks (Jockey room).' },
   { kind: 'decor', title: 'Barn decor', note: 'Decorations that show up in your stable.' },
+  { kind: 'facility', title: 'Ranch upgrades', note: 'Big upgrades that help every horse you raise.' },
 ];
 
 export const SHOP: ShopItem[] = [
@@ -36,6 +37,8 @@ export const SHOP: ShopItem[] = [
   { id: 'decor:lantern', kind: 'decor', label: 'Lantern', value: 'lantern', price: 200, blurb: 'A warm brass lantern.' },
   { id: 'decor:trophy', kind: 'decor', label: 'Trophy shelf', value: 'trophy', price: 400, blurb: 'Shows off a gold cup.' },
   { id: 'decor:sign', kind: 'decor', label: 'Lucky horseshoe', value: 'sign', price: 300, blurb: 'Hung over the door for luck.' },
+  { id: 'facility:track', kind: 'facility', label: 'Training track', value: 'track', price: 3000, blurb: 'Drills gain 10% more.' },
+  { id: 'facility:spa', kind: 'facility', label: 'Stable spa', value: 'spa', price: 2000, blurb: 'Rest clears 65 fatigue instead of 50.' },
   { id: 'decor:rug', kind: 'decor', label: 'Woven rug', value: 'rug', price: 300, blurb: 'A cozy rug for the aisle.' },
 ];
 

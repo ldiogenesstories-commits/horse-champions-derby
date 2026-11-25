@@ -198,6 +198,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
   // ---------- Shop ----------
   function swatch(i: ShopItem): string {
     if (i.kind === 'decor') return `<span class="hm-sw decor">${decorPreview(i.value)}</span>`;
+    if (i.kind === 'facility') return `<span class="hm-sw hm-fac">${i.value === 'track' ? '🏟️' : '🛁'}</span>`;
     if (i.kind === 'silks') {
       const j = o.jockey();
       const { defs, fill } = silksDefs({ ...j, pattern: i.value as Jockey['pattern'] });
@@ -211,7 +212,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
         <div class="hm-items">${SHOP.filter((i) => i.kind === s.kind).map((i) => {
           const have = owns(i.id);
           const can = wallet() >= i.price;
-          return `<div class="hm-item${have ? ' owned' : ''}">${swatch(i)}<b>${i.label}</b>
+          return `<div class="hm-item${have ? ' owned' : ''}">${swatch(i)}<b>${i.label}</b>${i.kind === 'facility' && i.blurb ? `<small class="muted">${i.blurb}</small>` : ''}
             ${have ? '<span class="hm-tag">Owned ✓</span>'
               : `<button class="hm-buy${can ? '' : ' poor'}" data-buy="${i.id}" ${can ? '' : 'disabled'}>${confirmId === i.id ? 'Tap to confirm' : hd(i.price)}</button>`}</div>`;
         }).join('')}</div></div>`).join('');
@@ -239,6 +240,9 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
     { ico: '🏋️', title: 'Training drills', text: 'Drills are quick mini-games that raise stats like Speed, Stamina and Gate. Better grades mean bigger gains, up to the max of each horse\'s individual capabilities.' },
     { ico: '💛', title: 'Trust and grooming', text: 'Brushing, hoof care, the right food and greeting your horse after a race build Trust. Every horse has a Need: learn what makes yours happy.' },
     { ico: '🏁', title: 'Race day', text: 'Pick a race plan, then ride: hold to save energy, whip in the final stretch. Prize money is paid for 1st to 5th, and events pay extra.' },
+    { ico: '🏟️', title: 'Classes and big races', text: 'Every horse starts in Maiden races and moves up by winning: Novice, Graded, Stakes, then Grand Prix. Four big races land on fixed weeks (Spring Classic wk 12, Royal Derby wk 24, Autumn Sprint Cup wk 34, Grand Championship wk 45). Time your horse\'s prime for them!' },
+    { ico: '⚔️', title: 'Rivals', text: 'Baron Blackthorn, Lady Starling, Ironclad Duke and Whirlwind Wren climb the ladder with you. They show up in some races and all of the big ones. Your head-to-head record is kept.' },
+    { ico: '🎟️', title: 'Entry fees and entering up', text: 'Higher classes and big races charge an entry fee. Feeling brave? Enter up a class for bigger prizes; a win counts double toward moving up.' },
     { ico: '🏆', title: 'Hall of Fame', text: 'After 25 races your horse retires with a card. Share its code or QR so family can add it to their Hall too.' },
     { ico: '🧬', title: 'Breeding', text: 'Pair a retiree with a visiting horse or another Hall horse. Foals inherit coats, markings, stats and star traits. Champion ancestors lift hidden peaks.' },
     { ico: '🐎', title: 'Your stable', text: `You start with 2 empty stalls and breed your first 2 horses, one at a time, from visiting horses. Earn a free stall after ${FREE_HORSE_RACES} races, or buy one for ${hd(NEW_HORSE_COST)}. Up to ${MAX_SLOTS} horses.` },

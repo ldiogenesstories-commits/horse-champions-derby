@@ -23,6 +23,10 @@ export interface CareerLog {
   gpWins?: number;
   /** Career points from placings, weighted by class. */
   ladderPts?: number;
+  /** Big races won (names). */
+  bigWins?: string[];
+  /** Head-to-head records against named rivals. */
+  rivals?: Record<string, { beat: number; lost: number }>;
 }
 export const NEW_CAREER = (): CareerLog => ({ eventWins: [], crowdGifts: 0, distances: [], bestPlace: 99 });
 
@@ -61,6 +65,7 @@ export function rankFor(points: number): string {
 
 export function badgesFor(log: CareerLog, trust: number): string[] {
   const b: string[] = [];
+  for (const w of [...new Set(log.bigWins ?? [])]) b.push(`🏆 ${w} winner`);
   if (log.gpWins) b.push(log.gpWins > 1 ? `${log.gpWins}x Grand Prix winner` : 'Grand Prix winner');
   else if ((log.topClass ?? 0) > 0) b.push(`Reached ${['Maiden', 'Novice', 'Graded', 'Stakes', 'Grand Prix'][log.topClass!]}`);
   for (const e of [...new Set(log.eventWins)]) b.push(`${e} winner`);
