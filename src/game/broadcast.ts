@@ -330,8 +330,17 @@ export class Broadcast {
     const sky = g.createLinearGradient(0, 0, 0, horizon);
     sky.addColorStop(0, '#6FA8C2'); sky.addColorStop(1, '#E3EFF2');
     g.fillStyle = sky; g.fillRect(0, 0, w, horizon);
-    g.fillStyle = '#A9C8A0';
-    g.beginPath(); g.moveTo(0, horizon); g.quadraticCurveTo(w * 0.25, horizon - h * 0.1, w * 0.5, horizon - h * 0.02); g.quadraticCurveTo(w * 0.75, horizon - h * 0.12, w, horizon); g.closePath(); g.fill();
+    const sc = this.sc;
+    if (sc) {
+      // Felt sky: paper sun, drifting clouds, hills on the horizon (panning a little with the camera).
+      const sun = h * 0.14;
+      g.drawImage(sc.sun, w * 0.78, h * 0.02, sun, sun);
+      tileRun(g, [{ img: sc.cloud1, height: h * 0.075, gap: w * 0.35 }, { img: sc.cloud2, height: h * 0.06, gap: w * 0.5 }], -w, 2 * w, -performance.now() * 0.006, h * 0.15);
+      tileX(g, sc.hills, -w, 2 * w, -this.camLane * 40, horizon + 4, h * 0.14);
+    } else {
+      g.fillStyle = '#A9C8A0';
+      g.beginPath(); g.moveTo(0, horizon); g.quadraticCurveTo(w * 0.25, horizon - h * 0.1, w * 0.5, horizon - h * 0.02); g.quadraticCurveTo(w * 0.75, horizon - h * 0.12, w, horizon); g.closePath(); g.fill();
+    }
     // Ground: infield (inside the inner rail), dirt, then the apron by the stands.
     g.fillStyle = '#4F8A5B'; g.fillRect(0, horizon, w, h - horizon);
     const far = 400;
@@ -341,8 +350,22 @@ export class Broadcast {
     };
     quad(-0.8, 9.5, '#C9A27A');
     quad(9.5, 30, '#E9DCC0');
-    // Grandstand wall receding toward the vanishing point, with the crowd.
-    {
+    // Felt scenery standing beside the track like stage flats, farthest first:
+    // cardboard grandstands outside the rail, felt trees in the infield.
+    if (sc) {
+      const flats: { d: number; lane: number; img: HTMLImageElement; m: number }[] = [];
+      const first = (step: number, off: number) => Math.ceil((camD - 160 - off) / step) * step + off;
+      for (let d = first(48, 0); d < camD - 4; d += 48) flats.push({ d, lane: 15.5, img: sc.stands, m: 7.5 });
+      for (let d = first(16, 5); d < camD - 3; d += 16) flats.push({ d, lane: -4, img: [sc.tree1, sc.tree2, sc.tree3][Math.abs(Math.floor(d / 16)) % 3], m: 5 });
+      flats.sort((x, y) => x.d - y.d);
+      for (const f of flats) {
+        const p = proj(f.d, f.lane);
+        const hh = f.m * p.s;
+        const ww = hh * f.img.naturalWidth / f.img.naturalHeight;
+        if (p.x - ww / 2 > w || p.x + ww / 2 < 0) continue;
+        g.drawImage(f.img, p.x - ww / 2, p.y - hh, ww, hh);
+      }
+    } else {
       const a = proj(camD - far, 12); const d = proj(camD - 2, 12);
       const top = (p: { y: number; s: number }) => p.y - 9 * p.s;
       g.fillStyle = '#E9DCC0'; g.strokeStyle = '#2B2118'; g.lineWidth = 2;
