@@ -9,6 +9,7 @@ import { trackPoint } from '../sim/track';
 import { DEFAULT_JOCKEY, type Jockey, type SilksPattern } from './jockey';
 import { portraitSVG } from './portrait';
 import { puppetFrames, puppetFrontFrames } from './puppet';
+import { loadScenery, tileRun, tileX, type Scenery } from './scenery';
 
 const FRAMES = 12; // gallop poses per horse
 const STRIDE_M = 7; // metres per full gallop cycle
@@ -36,6 +37,7 @@ export class Broadcast {
   private race: Race | null = null;
   private frames = new Map<string, CanvasImageSource[]>();
   private fronts = new Map<string, CanvasImageSource[]>();
+  private sc: Scenery | null = null;
   private pl = 0;
   private focus = '';
   private focusTurn = 0;
@@ -71,6 +73,7 @@ export class Broadcast {
   async load(race: Race, jockeys: Map<string, Jockey>): Promise<void> {
     this.race = race;
     this.names.clear();
+    this.sc = await loadScenery();
     const jobs = race.horses.map(async (h) => {
       const j = jockeys.get(h.def.id) ?? cpuJockey(h.def);
       if (jockeys.has(h.def.id) && j.name && j.name !== 'You') this.names.set(h.def.id, j.name);
@@ -252,8 +255,8 @@ export class Broadcast {
     const sky = g.createLinearGradient(0, -h, 0, h * 0.45);
     sky.addColorStop(0, '#6FA8C2'); sky.addColorStop(1, '#E3EFF2');
     g.fillStyle = sky; g.fillRect(L, -h, R - L, h * 1.45);
-    this.hills(g, L, R, h, -this.cam * ppm * 0.08);
-    this.stands(g, L, R, h, -this.cam * ppm * 0.3);
+    if (this.sc) this.backdrop(g, this.sc, L, R, w, h, ppm);
+    else { this.hills(g, L, R, h, -this.cam * ppm * 0.08); this.stands(g, L, R, h, -this.cam * ppm * 0.3); }
     g.fillStyle = '#4F8A5B'; g.fillRect(L, h * 0.42, R - L, trackTop - h * 0.42);
     g.fillStyle = '#C9A27A'; g.fillRect(L, trackTop, R - L, trackBot - trackTop);
     g.strokeStyle = 'rgba(43,33,24,0.08)'; g.lineWidth = 2;
@@ -409,6 +412,20 @@ export class Broadcast {
     for (const d of this.dust) { g.fillStyle = `rgba(169,143,110,${Math.max(0, d.life * 0.9)})`; g.beginPath(); g.arc(d.x, d.y, d.r, 0, Math.PI * 2); g.fill(); }
   }
 
+  /** Felt scenery: paper sun, drifting clouds, hills, then the grandstand and trees, each at its own parallax. */
+  private backdrop(g: CanvasRenderingContext2D, sc: Scenery, L: number, R: number, w: number, h: number, ppm: number): void {
+    const sun = h * 0.17;
+    g.drawImage(sc.sun, w * 0.8 - sun / 2, h * 0.03, sun, sun);
+    tileRun(g, [{ img: sc.cloud1, height: h * 0.09, gap: w * 0.32 }, { img: sc.cloud2, height: h * 0.075, gap: w * 0.45 }], L, R, -this.cam * ppm * 0.03 - performance.now() * 0.004, h * 0.17);
+    tileX(g, sc.hills, L, R, -this.cam * ppm * 0.08, h * 0.44, h * 0.2);
+    tileRun(g, [
+      { img: sc.stands, height: h * 0.24, gap: h * 0.04 },
+      { img: sc.tree1, height: h * 0.19, gap: h * 0.02 },
+      { img: sc.tree2, height: h * 0.16, gap: h * 0.03 },
+      { img: sc.tree3, height: h * 0.2, gap: h * 0.12 },
+    ], L, R, -this.cam * ppm * 0.3, h * 0.435);
+  }
+
   private hills(g: CanvasRenderingContext2D, L: number, R: number, h: number, off: number): void {
     const tile = 520;
     g.fillStyle = '#A9C8A0';
@@ -445,6 +462,7 @@ export class Broadcast {
   }
 
   private rail(g: CanvasRenderingContext2D, L: number, R: number, y: number, depth: number, ppm: number, postH: number): void {
+    if (this.sc) { tileX(g, this.sc.fence, L, R, -(this.cam * ppm * depth), y + 3, postH * 1.7, false); return; }
     const gap = 4 * ppm * depth;
     const off = (-(this.cam * ppm * depth)) % gap;
     g.fillStyle = '#FFFBF2'; g.strokeStyle = '#2B2118'; g.lineWidth = 1.5;
@@ -459,8 +477,9 @@ export class Broadcast {
       const x = sx(d, 0.82);
       if (x < L - 60 || x > R + 60) continue;
       if (left === 0) {
-        for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#FFFBF2' : '#C8452D'; g.fillRect(x - 5, y - 120 + i * 15, 10, 15); }
-        g.strokeStyle = '#2B2118'; g.lineWidth = 2; g.strokeRect(x - 5, y - 120, 10, 120);
+        if (this.sc) g.drawImage(this.sc.finish, x - 12, y - 128, 128 * this.sc.finish.naturalWidth / this.sc.finish.naturalHeight, 128);
+        else { for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#FFFBF2' : '#C8452D'; g.fillRect(x - 5, y - 120 + i * 15, 10, 15); } }
+        g.strokeStyle = '#2B2118'; g.lineWidth = 2;
         g.fillStyle = '#FFD23F'; g.fillRect(x - 40, y - 150, 80, 26); g.strokeRect(x - 40, y - 150, 80, 26);
         g.fillStyle = '#2B2118'; g.font = '900 15px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('FINISH', x, y - 137);
         // Finish line across the track.
