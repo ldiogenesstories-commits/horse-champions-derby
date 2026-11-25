@@ -20,7 +20,7 @@ import { runPacePartner } from './training/pacePartner';
 import { runGrooming, type CareKind } from './training/grooming';
 import { DEFAULT_LOOK, type Look } from './game/horseBody';
 import { puppetFrames } from './game/puppet';
-import { CAREER_RACES, NEW_CAREER, badgesFor, cardHTML, careerPoints, makeCode, rankFor, type CareerLog, type RetiredCard } from './career/career';
+import { CAREER_RACES, NEW_CAREER, badgesFor, cardHTML, paintCardArt, careerPoints, makeCode, rankFor, type CareerLog, type RetiredCard } from './career/career';
 import { makeFoal } from './sim/field';
 import { runBreeding } from './career/breedingScreen';
 import { runLobby, type Lobby, type StartMsg } from './net/lobby';
@@ -703,6 +703,7 @@ function retire(): void {
   const winPct = Math.round((c.record.w / Math.max(1, c.races)) * 100);
   $('ret-sub').textContent = `${c.races} races · ${c.record.w} wins (${winPct}%) · ${c.record.p} seconds · ${c.record.s} thirds · ${c.points} career points.`;
   $('ret-card').innerHTML = cardHTML(c);
+  void paintCardArt($('ret-card'), [c]);
   $('ret-name-box').hidden = true;
   show('retire');
 }
@@ -773,6 +774,7 @@ async function findCard(input: string): Promise<void> {
     foundCard = { ...c, code, guest: true, published: true };
     msg.textContent = `Found ${c.horse.name}${c.jockey?.name && c.jockey.name !== 'You' ? `, raised by ${c.jockey.name}` : ''}.`;
     $('card-preview').innerHTML = cardHTML(foundCard);
+    void paintCardArt($('card-preview'), [foundCard]);
     $('card-add').hidden = false;
   } catch {
     msg.textContent = 'Couldn\'t reach the card library. Check the internet connection and try again.';
@@ -785,6 +787,7 @@ function renderHall(): void {
   $('hall-grid').innerHTML = hall.length
     ? hall.map((c) => cardHTML(c)).join('')
     : `<p class="muted">No retired horses yet. Finish a ${CAREER_RACES}-race career, or add a card from family and friends.</p>`;
+  void paintCardArt($('hall-grid'), hall);
   show('hall');
 }
 
