@@ -58,6 +58,8 @@ export interface HorseDef {
   pedigree?: import('./pedigree').Pedigree;
   /** Named bloodline founded by a Champion sire, passed down the sire line. */
   line?: import('./pedigree').Line;
+  /** Hidden career arc: when the horse peaks and starts to slow down. */
+  arc?: import('./arc').Arc;
   /** Breeding: foals this horse has had on its home ranch. */
   foals?: number;
   distancePref?: 'sprint' | 'mile' | 'classic' | 'endurance';

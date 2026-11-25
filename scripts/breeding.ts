@@ -128,5 +128,27 @@ for (let i = 0; i < 400; i++) {
 check(withB / 400 > without / 400 + 1, `lineage lifts average stamina peak (${(withB / 400).toFixed(1)} vs ${(without / 400).toFixed(1)})`);
 check(lineOf(stallion('S', 'bay'), 'Champion')?.name === 'S', 'lineOf founds a line from a Champion');
 
+// ---- Career arc ----
+import { arcOf, inheritArc, arcHint, ARCS } from '../src/sim/arc';
+{
+  const early = { ...base('E', 'bay'), arc: 'early' as const };
+  const late = { ...base('L', 'bay'), sex: 'stallion' as const, arc: 'late' as const };
+  let same = 0, surprise = 0;
+  const N = 6000;
+  for (let i = 0; i < N; i++) {
+    const a = inheritArc(early, late, makeRng(i));
+    if (a === 'early' || a === 'late') same++;
+    if (a === 'steady') surprise++;
+  }
+  check(Math.abs(same / N - 0.9) < 0.03, `foals usually take a parent's arc (${(100 * same / N).toFixed(1)}%)`);
+  check(surprise > 0, 'now and then a surprise arc');
+  check(arcHint(early, late) === 'Steady', 'hint is the parents\' average');
+  check(arcHint(early, early) === 'Early', 'two early parents hint Early');
+  const f = breedFoal(early, late, 'F', 3);
+  check(!!f.arc && ARCS.includes(f.arc), 'bred foals get an arc');
+  check(arcOf({ name: 'Old Timer' }) === arcOf({ name: 'Old Timer' }), 'old horses get a stable arc from their name');
+  check(JSON.stringify(breedFoal(early, late, 'F', 9)) === JSON.stringify(breedFoal(early, late, 'F', 9)), 'arc is deterministic per seed');
+}
+
 console.log(failed ? `\n${failed} FAILED` : '\nAll breeding checks passed');
 process.exit(failed ? 1 : 0);

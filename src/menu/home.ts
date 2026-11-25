@@ -233,9 +233,10 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
 
   // ---------- How to Play ----------
   const STEPS: { ico: string; title: string; text: string }[] = [
-    { ico: '🐴', title: 'Raise a champion', text: 'Each horse has a 25-race career. Between races you care for it in the stable or out on the ranch, then retire it into the Hall of Fame.' },
-    { ico: '🌅', title: 'Three actions a day', text: 'Each day you get 3 actions: train, feed, groom or rest. Watch Fatigue: a tired horse starts races with less energy.' },
-    { ico: '🏋️', title: 'Training drills', text: 'Drills are quick mini-games that raise stats like Speed, Stamina and Gate. Better grades mean bigger gains, up to each stat\'s hidden peak.' },
+    { ico: '🐴', title: 'Raise a champion', text: 'Each horse has a career of up to 25 races. Between races you care for it in the stable or out on the ranch, then retire it into the Hall of Fame.' },
+    { ico: '📈', title: 'Every horse has a prime', text: 'Some horses peak early, some late. After its prime a horse slowly slips and trains less well, so don\'t wait too long to race. Too many weeks off in a row makes a horse rusty.' },
+    { ico: '🌅', title: '3 actions make a game week', text: 'A game week is 3 actions (train, feed, groom or rest), then a race or another week of training. It isn\'t a real week: play as many as you like. A career lasts up to 25 races or 50 weeks, whichever comes first.' },
+    { ico: '🏋️', title: 'Training drills', text: 'Drills are quick mini-games that raise stats like Speed, Stamina and Gate. Better grades mean bigger gains, up to the max of each horse\'s individual capabilities.' },
     { ico: '💛', title: 'Trust and grooming', text: 'Brushing, hoof care, the right food and greeting your horse after a race build Trust. Every horse has a Need: learn what makes yours happy.' },
     { ico: '🏁', title: 'Race day', text: 'Pick a race plan, then ride: hold to save energy, whip in the final stretch. Prize money is paid for 1st to 5th, and events pay extra.' },
     { ico: '🏆', title: 'Hall of Fame', text: 'After 25 races your horse retires with a card. Share its code or QR so family can add it to their Hall too.' },

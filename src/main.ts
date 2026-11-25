@@ -48,6 +48,7 @@ import { decorSVG } from './profile/decor';
 import { runHome } from './menu/home';
 import { hd, hdCoin } from './game/money';
 import { PREMIER_COST } from './career/breeding';
+import { CAREER_WEEKS, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -184,7 +185,7 @@ function renderPaddock(): void {
   $('pc-style').textContent = STYLE_LABEL[player.style];
   $('pc-dist').textContent = DIST_INFO[(player.distancePref ?? 'mile') as DistanceKey].label;
   renderDistance();
-  $('pc-record').textContent = raceCount ? `${raceCount} of ${CAREER_RACES} races · ${record.w}-${record.p}-${record.s}` : `Maiden · 0 of ${CAREER_RACES} races`;
+  $('pc-record').textContent = `${raceCount ? `${raceCount} of ${CAREER_RACES} races · ${record.w}-${record.p}-${record.s}` : `Maiden · 0 of ${CAREER_RACES} races`} · Week ${Math.min(day, CAREER_WEEKS)} of ${CAREER_WEEKS}`;
   const stats: [string, number][] = [
     ['Speed', player.stats.speed], ['Stamina', player.stats.stamina], ['Acceleration', player.stats.accel],
     ['Guts', player.stats.guts], ['Gate Skill', player.stats.gate], ['Agility', player.stats.agility],
@@ -536,6 +537,9 @@ function showResults(r: Race): void {
   confidence = Math.min(confCap, Math.round(p.confidence * 0.6 + player.boldness * 0.4));
   fatigue = Math.min(100, fatigue + RACE_FATIGUE);
   day++;
+  rustWeeks = 0;
+  rustApplied = 0;
+  weekPassed();
   actionsLeft = ACTIONS_PER_DAY;
   // Gifts: fans cheer up a last-place horse; event winners earn a prize meal.
   pendingGift = null;
@@ -567,7 +571,7 @@ function showResults(r: Race): void {
   checkFriends();
   renderGrowthLog();
   renderGift();
-  const done = raceCount >= CAREER_RACES;
+  const done = careerOver();
   $('race-again').hidden = done || !!net;
   $('to-paddock').textContent = net ? 'Back to the family room' : done ? 'Retirement ceremony 🎉' : 'Back to stable';
   if (done) $('res-title').textContent += ` · Farewell race`;
@@ -583,7 +587,7 @@ function renderGift(): void {
   $('gift-btns').hidden = false;
   if (pendingGift.from === 'prize') {
     $('gift-title').textContent = `${raceEvent?.name ?? 'Event'} prize!`;
-    $('gift-text').innerHTML = `The winner's table serves <b>${f.name}</b> (${f.effect}). ${player.name} eats it right away, so no feeding needed today.`;
+    $('gift-text').innerHTML = `The winner's table serves <b>${f.name}</b> (${f.effect}). ${player.name} eats it right away, so no feeding needed this week.`;
   } else {
     $('gift-title').textContent = 'A gift from the crowd';
     $('gift-text').innerHTML = `Fans felt for ${player.name} and sent <b>${f.name}</b> (${f.effect}). Accept and ${player.name} eats it now, saving you a feeding action.`;
@@ -663,7 +667,7 @@ $('to-paddock').addEventListener('click', () => {
   fieldSeed++;
   save();
   if (net && lobby) { show('family'); lobby.backToRoom(); return; }
-  if (raceCount >= CAREER_RACES) retire();
+  if (careerOver()) retire();
   else show('stable');
 });
 for (const b of document.querySelectorAll<HTMLButtonElement>('.greet')) b.addEventListener('click', () => greet(b.dataset.g as Greeting));
@@ -711,7 +715,13 @@ bindSlider('t-block', 'v-block', 'blockingStrength', (v) => v.toFixed(1));
 
 // ---------- Stable ----------
 let fatigue = 0;
+/** The game week (the save calls it `day` from before weeks). */
 let day = 1;
+/** Training weeks in a row (no race): makes the horse rusty. */
+let rustWeeks = 0;
+let rustApplied = 0;
+/** Stat points lost since the horse's peak. */
+let declined = 0;
 const treats: Record<TreatId, number> = { treatA: 0, treatB: 0, starfruit: 0 };
 let pendingConfBoost = 0;
 let cleanupDrill: (() => void) | null = null;
@@ -752,7 +762,7 @@ function spendAction(): void {
 }
 function needAction(): boolean {
   if (actionsLeft > 0) return true;
-  stableMsg('No actions left today. Head to the Race office to start a new day.', true);
+  stableMsg('No actions left this week. Race, or train another week.', true);
   return false;
 }
 
@@ -762,6 +772,28 @@ const HALL_KEY = 'hcd-hall-v1';
 let hall: RetiredCard[] = [];
 try { hall = JSON.parse(localStorage.getItem(HALL_KEY) ?? '[]'); } catch { hall = []; }
 let retiredCard: RetiredCard | null = null;
+
+/** A career ends after 25 races or 50 weeks, whichever comes first. */
+function careerOver(): boolean { return raceCount >= CAREER_RACES || day > CAREER_WEEKS; }
+const weeksLeft = (): number => Math.max(0, CAREER_WEEKS - day + 1);
+const racesLeft = (): number => Math.max(0, CAREER_RACES - raceCount);
+const pastPeak = (): boolean => day > PEAK_WEEK[arcOf(player)];
+
+/**
+ * A week has gone by (raced or trained). Past its peak a horse slowly loses form:
+ * one point every other week, from its best stats, up to MAX_DECLINE in all.
+ */
+function weekPassed(): boolean {
+  const peak = PEAK_WEEK[arcOf(player)];
+  if (day <= peak || declined >= MAX_DECLINE || (day - peak) % 2 !== 0) return false;
+  const top = (Object.keys(player.stats) as StatKey[]).sort((a, b) => player.stats[b] - player.stats[a]).slice(0, 3);
+  const k = top[Math.floor(Math.random() * top.length)];
+  player.stats[k] = Math.max(30, player.stats[k] - 1);
+  declined++;
+  if (declined === 1) growthLog.push({ text: PRIME_MSG(), cls: '' });
+  return declined === 1;
+}
+const PRIME_MSG = () => `${player.name} is a little past their prime. Stats will slowly slip, and training gains are smaller now.`;
 
 function retire(): void {
   if (!retiredCard) {
@@ -807,7 +839,7 @@ function askFoalName(): void {
 }
 
 /** The active horse has finished its career, so a new horse can take its stall. */
-const activeRetired = (): boolean => !!retiredCard || raceCount >= CAREER_RACES;
+const activeRetired = (): boolean => !!retiredCard || careerOver();
 const STABLE_FULL = 'Your stable is full. Retire a horse, or open a new stall in My Stable.';
 /** Can a new horse move in (into the retired horse's stall, or an empty one)? */
 const roomForHorse = (): boolean => activeRetired() || emptySlots() > 0;
@@ -1090,10 +1122,17 @@ function renderStable(): void {
   nameplate.classList.toggle('editable', canRename());
   nameplate.setAttribute('aria-label', canRename() ? `Rename ${player.name}` : player.name);
   void stableHorse(player, look, groomToday().brush);
-  $('st-day').textContent = `Day ${day}`;
+  const wl = weeksLeft();
+  $('st-day').textContent = `Week ${Math.min(day, CAREER_WEEKS)} of ${CAREER_WEEKS}`;
+  const tight = wl <= racesLeft();
+  $('st-weeks').textContent = tight
+    ? `Only ${wl} week${wl === 1 ? '' : 's'} left for ${racesLeft()} race${racesLeft() === 1 ? '' : 's'}: race every week!`
+    : `${racesLeft()} races and ${wl} weeks left`;
+  $('st-weeks').classList.toggle('warn', tight);
+  $('go-week').querySelector('span')!.textContent = rustWeeks ? `Rusty after ${rustWeeks} week${rustWeeks === 1 ? '' : 's'} off` : 'Skip the race · uses a week';
   const fs = fatigueState();
-  $('st-mood').textContent = pendingBuff ? 'In Form!' : hungry() ? 'Hungry' : FATIGUE_MOOD[fs];
-  $('feed-status').textContent = hungry() ? 'Breakfast time' : `Fed today${drillBoost ? ` · +${Math.round(drillBoost * 100)}% drill ready` : ''}`;
+  $('st-mood').textContent = pendingBuff ? 'In Form!' : rustWeeks >= 2 ? 'A bit rusty' : hungry() ? 'Hungry' : FATIGUE_MOOD[fs];
+  $('feed-status').textContent = hungry() ? 'Feeding time' : `Fed this week${drillBoost ? ` · +${Math.round(drillBoost * 100)}% drill ready` : ''}`;
   // Action budget.
   $('st-actions').innerHTML = Array.from({ length: ACTIONS_PER_DAY }, (_, i) => `<i class="${i < actionsLeft ? 'on' : ''}"></i>`).join('');
   $('st-actions-num').textContent = actionsLeft ? `${actionsLeft} left` : 'Race next';
@@ -1101,11 +1140,11 @@ function renderStable(): void {
   const guests = hall.filter((c) => c.guest).length;
   $('hall-count').textContent = hall.length ? `${hall.length - guests} retired${guests ? ` · ${guests} guest${guests > 1 ? 's' : ''}` : ''}` : 'Cards and legends';
   const ev = eventToday();
-  $('go-race').querySelector('span')!.textContent = ev ? `Today: ${ev.name}!` : actionsLeft ? 'Pick a race' : 'Start a new day';
+  $('go-race').querySelector('span')!.textContent = ev ? `This week: ${ev.name}!` : 'Pick a race';
   $('feed-panel').hidden = true;
   $('rename-panel').hidden = true;
   const g = groomToday();
-  $('groom-status').textContent = g.brush && g.hooves ? 'Groomed today ✓' : 'Brush · braid · dress up';
+  $('groom-status').textContent = g.brush && g.hooves ? 'Groomed this week ✓' : 'Brush · braid · dress up';
   $('st-fatigue').style.width = `${fatigue}%`;
   // Stretch the gradient across the whole track so the colour shows how tired, not just how full.
   $('st-fatigue').style.backgroundSize = `${(100 / Math.max(fatigue, 1)) * 100}% 100%`;
@@ -1159,8 +1198,8 @@ function openFeed(): void {
   $('treat-panel').hidden = true;
   const fav = favoriteFeed();
   $('feed-note').textContent = hungry()
-    ? `One meal a day, uses an action. ${favKnown ? `${player.name} loves ${FEEDS[fav].name.toLowerCase()}.` : 'Every horse has a favourite. Try them all to find it.'} Racing hungry costs ${HUNGRY_ENERGY}% starting energy.`
-    : `${player.name} has eaten today. Come back tomorrow.`;
+    ? `One meal a week, uses an action. ${favKnown ? `${player.name} loves ${FEEDS[fav].name.toLowerCase()}.` : 'Every horse has a favourite. Try them all to find it.'} Racing hungry costs ${HUNGRY_ENERGY}% starting energy.`
+    : `${player.name} has eaten this week. Come back next week.`;
   $('feed-list').innerHTML = BIN.map((f) => {
     const isFav = favKnown && f === fav;
     return `<li><button data-feed="${f}" ${hungry() ? '' : 'disabled'}><b><span class="feed-ico">${FEEDS[f].ico}</span>${FEEDS[f].name}${isFav ? ' <span class="fav">♥ favourite</span>' : ''}</b><span>${FEEDS[f].effect}${isFav ? ' · plus Trust +1' : ''}</span></button></li>`;
@@ -1255,7 +1294,7 @@ function grow(k: StatKey, gain: number): number {
   const cur = player.stats[k];
   const room = potentialOf(player, k) - cur;
   if (room <= 0) return 0;
-  const got = Math.min(room, gain * Math.max(0.25, Math.min(1, room / 6)));
+  const got = Math.min(room, gain * (pastPeak() ? PAST_PEAK_GAIN : 1) * Math.max(0.25, Math.min(1, room / 6)));
   player.stats[k] = cur + got;
   return got;
 }
@@ -1334,7 +1373,7 @@ function save(): void {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       horse: player, career, retiredCard, lastPlace, webWord, webPending, webFresh,
       stats: player.stats, confidence, confCap, trust, needRevealed, pendingBuff, raceCount, record,
-      fatigue, day, treats, pendingConfBoost, best, fedDay, drillBoost, favKnown, look, groomed, actionsLeft,
+      fatigue, day, rustWeeks, rustApplied, declined, treats, pendingConfBoost, best, fedDay, drillBoost, favKnown, look, groomed, actionsLeft,
     }));
     scheduleBackup();
   } catch { /* storage unavailable: play on without saving */ }
@@ -1362,6 +1401,9 @@ function load(): void {
     Object.assign(record, d.record ?? {});
     fatigue = d.fatigue ?? 0;
     day = d.day ?? 1;
+    rustWeeks = d.rustWeeks ?? 0;
+    rustApplied = d.rustApplied ?? 0;
+    declined = d.declined ?? 0;
     Object.assign(treats, d.treats ?? {});
     pendingConfBoost = d.pendingConfBoost ?? 0;
     Object.assign(best, d.best ?? {});
@@ -1396,6 +1438,35 @@ $('treat-list').addEventListener('click', (e) => {
   if (b) useTreat(b.dataset.treat as TreatId);
 });
 $('go-rest').addEventListener('click', rest);
+let weekArmed = 0;
+/** Skip the race and train another week: 3 fresh actions, one week gone, and a little rust. */
+function trainWeek(): void {
+  const b = $('go-week');
+  if (Date.now() - weekArmed > 4000) {
+    weekArmed = Date.now();
+    const lose = weeksLeft() <= racesLeft();
+    b.querySelector('span')!.textContent = lose ? 'Tap again: you\'ll lose a race!' : 'Tap again to skip this week\'s race';
+    setTimeout(() => { if ($('stable').classList.contains('active')) renderStable(); }, 4000);
+    return;
+  }
+  weekArmed = 0;
+  day++;
+  actionsLeft = ACTIONS_PER_DAY;
+  fatigue = Math.max(0, fatigue - 10);
+  rustWeeks++;
+  growthLog = [];
+  // The first week off is free; then −3 confidence, then −6 a week, up to −15. Racing clears it.
+  const step = rustWeeks < 2 ? 0 : rustWeeks === 2 ? 3 : 6;
+  const hit = Math.min(step, 15 - rustApplied);
+  if (hit > 0) { confidence = Math.max(0, confidence - hit); rustApplied += hit; }
+  const turned = weekPassed();
+  save();
+  if (careerOver()) { stableMsg(`${player.name}'s ${CAREER_WEEKS} weeks are up. Time to retire!`); retire(); return; }
+  if (turned) { stableMsg(`${PRIME_MSG()}${hit > 0 ? ` Also a bit rusty (Confidence −${hit}).` : ''}`, true); renderStable(); return; }
+  stableMsg(hit > 0 ? `A week of training. ${player.name} is getting rusty (Confidence −${hit}). A race will shake it off.` : `A week of training. 3 fresh actions!`, hit > 0);
+  renderStable();
+}
+$('go-week').addEventListener('click', trainWeek);
 $('go-feed').addEventListener('click', openFeed);
 $('go-groom').addEventListener('click', openGrooming);
 $('go-jockey').addEventListener('click', openJockeyRoom);
@@ -1713,7 +1784,7 @@ function renderRanchHud(): void {
   ranch?.setFriends(friends);
   $('rn-name').textContent = player.name;
   const ev = eventToday();
-  $('rn-day').textContent = `Day ${day}${ev ? ` · ${ev.name} today!` : ''}`;
+  $('rn-day').textContent = `Week ${Math.min(day, CAREER_WEEKS)} of ${CAREER_WEEKS}${ev ? ` · ${ev.name}!` : ''}`;
   $('rn-actions').innerHTML = Array.from({ length: ACTIONS_PER_DAY }, (_, i) => `<i class="${i < actionsLeft ? 'on' : ''}"></i>`).join('');
   ($('rn-fatigue') as HTMLElement).style.width = `${Math.round(fatigue)}%`;
 }

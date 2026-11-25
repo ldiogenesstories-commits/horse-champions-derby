@@ -1,3 +1,4 @@
+import { ARC_LABEL, arcOf } from '../sim/arc';
 // Career arc: a horse races 25 times, then retires with a ceremony, a rank,
 // badges, and a collectible virtual card (unique code + QR) for the Hall of Fame.
 import qrcode from 'qrcode-generator';
@@ -128,6 +129,7 @@ export function cardHTML(c: RetiredCard): string {
     <h3 class="hcard-name">${c.horse.name}</h3>
     ${c.horse.sire ? `<div class="hcard-jockey">By ${c.horse.sire} out of ${c.horse.dam}${c.horse.generation ? ` · Gen ${c.horse.generation}` : ''}</div>` : ''}
     ${c.jockey ? `<div class="hcard-jockey">${silksBadge(c.jockey, 16)} Ridden by ${c.jockey.name}</div>` : ''}
+    <div class="hcard-jockey">${ARC_LABEL[arcOf(c.horse)]}</div>
     <div class="hcard-rec">${c.record.w}–${c.record.p}–${c.record.s} <small>in ${c.races} races · ${c.points} pts</small></div>
     <div class="hcard-stats">${STAT_ROWS.map(([k, l]) => `<div><span>${l}</span><b>${Math.round(s[k])}</b><i style="width:${Math.round(s[k])}%"></i></div>`).join('')}</div>
     ${c.badges.length ? `<ul class="hcard-badges">${c.badges.map((b) => `<li>${b}</li>`).join('')}</ul>` : ''}

@@ -6,6 +6,7 @@ import { NEEDS } from '../sim/field';
 import type { HorseDef } from '../sim/types';
 import { BAND_HI, BAND_LO, POT_HI, POT_LO, potentialOf, rollIn, rollSparks, settlePotential, sparksOf } from '../sim/growth';
 import { lineageBonus, lineOf, pedigreeOf } from '../sim/pedigree';
+import { inheritArc, randomArc } from '../sim/arc';
 import { coatOdds, inheritGenes, RARE_COATS, visibleCoat, visibleMarking, withHiddenGenes } from '../sim/genetics';
 
 type StatKey = keyof HorseDef['stats'];
@@ -81,6 +82,7 @@ export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partne
   prem.cost = PREMIER_COST;
   prem.note = `Star trait guaranteed: ${pStars.map((k) => BLURBS[k]).join(' and ')}.`;
   prem.record = `${Math.round(14 + rng() * 8)} career wins`;
+  for (const v of list) v.horse.arc = randomArc(rng);
   return list;
 }
 
@@ -168,6 +170,7 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, 
     distancePref: (['sprint', 'mile', 'classic', 'endurance'] as const)[dIdx],
     sex: rng() < 0.5 ? 'mare' : 'stallion',
     sire: sireH.name, dam: damH.name,
+    arc: inheritArc(a, b, makeRng(seed * 13 + 5)),
     pedigree: pedigreeOf(sireH, sireRank, damH, damRank),
     line,
     generation: Math.max(a.generation ?? 1, b.generation ?? 1) + 1,
