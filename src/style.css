@@ -807,3 +807,31 @@ body[data-screen="race"] .snd-btn { top: auto; right: auto; left: 10px; bottom: 
 .hall-tree { margin-top: 4px; width: 100%; }
 .br-perks { margin: 4px 0 10px; padding-left: 18px; font-size: 13px; font-weight: 700; }
 .hall-item { display: grid; gap: 6px; justify-items: start; }
+
+/* ---------- Opening sequence ---------- */
+.intro { position: fixed; inset: 0; z-index: 800; background: #17110B; overflow: hidden; touch-action: manipulation; }
+.intro-box { position: absolute; left: 50%; top: 50%; width: min(100vw, calc(100dvh * 16 / 9)); aspect-ratio: 16 / 9; transform: translate(-50%, -50%); overflow: hidden; background: #F3EBD2; }
+.intro-v { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #F3EBD2; }
+.intro-scene2 { position: absolute; inset: 0; visibility: hidden; background: linear-gradient(#9CD3EE, #CDE9F4 60%); }
+.intro-scene2.on { visibility: visible; }
+.intro-ground { position: absolute; left: -2%; right: -2%; bottom: -2%; height: 24%; background: linear-gradient(#7FB069, #5F9A55); border-top: 3px solid #2B2118; transform-origin: 50% 100%; opacity: 0; }
+.intro-pop { position: absolute; height: auto; transform-origin: 50% 100%; opacity: 0; pointer-events: none; }
+.intro-scene2 .v2 { opacity: 0; }
+.intro-gate, .intro-title { position: absolute; inset: 0; display: grid; place-items: center; align-content: center; gap: 36px; cursor: pointer;
+  background: radial-gradient(ellipse at 50% 40%, #4F8A5B 0, #3E6B48 38%, #24402B 100%); }
+.intro-title[hidden] { display: none; }
+.intro-title .tx-logo, .intro-gate .tx-logo { position: static; margin: 0 0 22px; width: auto; height: auto; opacity: 1; transform: scale(1.25); }
+.intro-title .tx-logo svg, .intro-gate .tx-logo svg { width: 120px; height: 110px; }
+.intro-title .tx-logo b { font-size: 32px; }
+.intro-title .tx-logo span { font-size: 50px; }
+.intro-title .tx-logo { opacity: 0; }
+.intro-touch { margin: 0; font: 900 18px var(--display, system-ui); letter-spacing: .14em; text-transform: uppercase; color: #FFFBF2; text-shadow: 2px 2px 0 #2B2118; animation: intro-pulse 1.6s ease-in-out infinite; }
+.intro-title .intro-touch { opacity: 0; }
+@keyframes intro-pulse { 50% { transform: scale(1.06); } }
+.intro-flash { position: absolute; inset: 0; background: #FFF3C2; opacity: 0; pointer-events: none; }
+.intro-conf { position: absolute; left: 50%; top: 42%; width: 9px; height: 14px; border: 1.5px solid #2B2118; border-radius: 2px; pointer-events: none; }
+.intro-skip, .intro-snd { position: absolute; z-index: 2; top: calc(10px + env(safe-area-inset-top)); font: 800 13px var(--body, system-ui); color: #FFFBF2; background: rgba(23,17,11,.55); border: 2px solid rgba(255,251,242,.7); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.intro-skip { right: 10px; }
+.intro-snd { left: 10px; }
+.intro-skip[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .intro-touch { animation: none; } }

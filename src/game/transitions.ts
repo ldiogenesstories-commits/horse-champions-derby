@@ -18,7 +18,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const run = (el: Element, frames: Keyframe[], opts: KeyframeAnimationOptions) =>
   el.animate(frames, { fill: 'forwards', ...opts }).finished.catch(() => undefined);
 
-const LOGO = `
+export const LOGO = `
 <div class="tx-logo">
   <svg viewBox="0 0 120 110" aria-hidden="true">
     <path d="M24 96 C6 70 8 30 34 14 C48 5 72 5 86 14 C112 30 114 70 96 96"
