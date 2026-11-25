@@ -692,6 +692,9 @@ button.st-nameplate.editable { cursor: pointer; }
 .rn-stick { position: absolute; left: 18px; bottom: calc(22px + env(safe-area-inset-bottom)); width: 124px; height: 124px; border-radius: 50%; background: rgba(255,251,242,.5); border: 3px solid rgba(43,33,24,.55); touch-action: none; }
 .rn-stick i { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: var(--paper); border: 3px solid var(--ink); box-shadow: 2px 3px 0 var(--ink); }
 .rn-stick[hidden] { display: none; }
+/* Resting stick is just a faint hint; it pops to full strength under your thumb. */
+.rn-stick { opacity: .55; pointer-events: none; transition: opacity .15s; }
+.rn-stick.live { opacity: 1; }
 .rn-mode { position: absolute; right: 12px; bottom: calc(22px + env(safe-area-inset-bottom)); font: 800 12px var(--body); background: var(--paper); border: 2px solid var(--ink); border-radius: 10px; padding: 6px 9px; box-shadow: 2px 2px 0 var(--ink); cursor: pointer; }
 .rn-gait { position: absolute; left: 150px; bottom: calc(30px + env(safe-area-inset-bottom)); font: 900 12px var(--body); letter-spacing: .1em; color: var(--ink); background: rgba(255,251,242,.85); border: 2px solid var(--ink); border-radius: 8px; padding: 3px 7px; }
 .rn-gait:empty { display: none; }
