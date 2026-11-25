@@ -48,7 +48,8 @@ import { decorSVG } from './profile/decor';
 import { runHome } from './menu/home';
 import { hd, hdCoin } from './game/money';
 import { PREMIER_COST } from './career/breeding';
-import { CAREER_WEEKS, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
+import { currentClass, ladderLine, recordFinish } from './career/ladder';
+import { CAREER_WEEKS, DECLINE_EVERY, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -287,7 +288,7 @@ function startRace(): void {
   net = null;
   netDone = false;
   $('race').classList.remove('tv');
-  field = makeField(fieldSeed, player, { ...plan }, rideAuto, confidence, 8, confCap, pendingBuff);
+  field = makeField(fieldSeed, player, { ...plan }, rideAuto, confidence, 8, confCap, pendingBuff, currentClass(career).rivals);
   if (pendingBuff) setTimeout(() => setCall(`${player.name} is In Form today!`, 'player'), 50);
   pendingBuff = undefined;
   const me = field.find((e) => e.isPlayer);
@@ -502,7 +503,9 @@ function showResults(r: Race): void {
   const p = r.player!;
   raceCount++;
   countRace();
-  const prize = prizeFor(p.place, !!raceEvent);
+  const cls = currentClass(career);
+  const prize = Math.round(prizeFor(p.place, !!raceEvent) * (net ? 1 : cls.prize));
+  const promoted = net ? null : recordFinish(career, p.place);
   if (prize) earn(prize);
   $('res-prize').hidden = !prize;
   $('res-prize').innerHTML = prize ? `${hdCoin(26)}<span>Prize money <b>${hd(prize)}</b> · Wallet ${hd(wallet())}</span>` : '';
@@ -567,6 +570,7 @@ function showResults(r: Race): void {
   $('praise-msg').textContent = '';
   renderGrowthLog();
   greeted = false;
+  if (promoted) growthLog.push({ text: `🏅 Promoted! ${player.name} moves up to ${promoted} races: tougher rivals, bigger prizes.`, cls: 'big' });
   if (earnedShoe) growthLog.push({ text: `🍀 Earned a Lucky Horseshoe! Every stat can now grow a little higher.`, cls: 'big' });
   checkFriends();
   renderGrowthLog();
@@ -781,11 +785,11 @@ const pastPeak = (): boolean => day > PEAK_WEEK[arcOf(player)];
 
 /**
  * A week has gone by (raced or trained). Past its peak a horse slowly loses form:
- * one point every other week, from its best stats, up to MAX_DECLINE in all.
+ * a point every DECLINE_EVERY weeks, from its best stats, up to MAX_DECLINE in all.
  */
 function weekPassed(): boolean {
   const peak = PEAK_WEEK[arcOf(player)];
-  if (day <= peak || declined >= MAX_DECLINE || (day - peak) % 2 !== 0) return false;
+  if (day <= peak || declined >= MAX_DECLINE || (day - peak) % DECLINE_EVERY !== 0) return false;
   const top = (Object.keys(player.stats) as StatKey[]).sort((a, b) => player.stats[b] - player.stats[a]).slice(0, 3);
   const k = top[Math.floor(Math.random() * top.length)];
   player.stats[k] = Math.max(30, player.stats[k] - 1);
@@ -1127,7 +1131,7 @@ function renderStable(): void {
   const tight = wl <= racesLeft();
   $('st-weeks').textContent = tight
     ? `Only ${wl} week${wl === 1 ? '' : 's'} left for ${racesLeft()} race${racesLeft() === 1 ? '' : 's'}: race every week!`
-    : `${racesLeft()} races and ${wl} weeks left`;
+    : `${ladderLine(career)} · ${racesLeft()} races, ${wl} weeks left`;
   $('st-weeks').classList.toggle('warn', tight);
   $('go-week').querySelector('span')!.textContent = rustWeeks ? `Rusty after ${rustWeeks} week${rustWeeks === 1 ? '' : 's'} off` : 'Skip the race · uses a week';
   const fs = fatigueState();
@@ -1484,7 +1488,7 @@ $('go-race').addEventListener('click', () => {
   const n = raceCount + 1;
   $('pre-sub').textContent = n >= CAREER_RACES
     ? `Race ${n} of ${CAREER_RACES}: the Farewell Race. Make it count!`
-    : `Race ${n} of ${CAREER_RACES}. Choose a distance and your race plan, then load the gate.`;
+    : `Race ${n} of ${CAREER_RACES} · ${currentClass(career).name} race. Choose a distance and your race plan, then load the gate.`;
   eventEntered = !!eventToday();
   renderEvent();
   renderPaddock();

@@ -36,7 +36,8 @@ export const PLAYER_HORSE: HorseDef = {
   potential: { speed: 86, stamina: 82, accel: 90, guts: 80, gate: 86, agility: 88 },
 };
 
-export function makeField(seed: number, player: HorseDef | null, playerPlan: RacePlan, playerAuto: boolean, playerConfidence?: number, size = 8, playerCap?: number, playerBuff?: Entrant['buff']): Entrant[] {
+/** `rivals`: the range rival stats are rolled in (the class ladder); default 40-80. */
+export function makeField(seed: number, player: HorseDef | null, playerPlan: RacePlan, playerAuto: boolean, playerConfidence?: number, size = 8, playerCap?: number, playerBuff?: Entrant['buff'], rivals: [number, number] = [40, 80]): Entrant[] {
   const rng = makeRng(seed);
   const styles: RunningStyle[] = ['front', 'stalker', 'mid', 'closer'];
   const used = new Set<number>();
@@ -48,7 +49,7 @@ export function makeField(seed: number, player: HorseDef | null, playerPlan: Rac
     while (used.has(n)) n = (n + 1) % NAMES.length;
     used.add(n);
     const style = styles[Math.floor(rng() * styles.length)];
-    const stat = () => Math.round(40 + rng() * 40);
+    const stat = () => Math.round(rivals[0] + rng() * (rivals[1] - rivals[0]));
     const stamina = stat();
     const speed = stat();
     // Best distance leans on stamina vs. speed, with some surprises.
