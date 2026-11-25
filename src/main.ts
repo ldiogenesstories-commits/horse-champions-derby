@@ -11,6 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
+import { bugle, gateBell, isMuted, setMuted, unlockAudio } from './game/sfx';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -134,7 +135,8 @@ function show(id: Screen): void {
   const kind = transitionFor(SCREENS.find((s) => $(s).classList.contains('active')), id);
   if (kind) {
     pendingScreen = id;
-    void playTransition(kind, () => { const t = pendingScreen ?? id; pendingScreen = null; showNow(t); });
+    void playTransition(kind, () => { const t = pendingScreen ?? id; pendingScreen = null; showNow(t); })
+      .then(() => { if (id === 'pre' && $('pre').classList.contains('active')) bugle(); }); // call to the races
     return;
   }
   showNow(id);
@@ -289,7 +291,7 @@ function launchRace(narratorSeed: number): void {
   show('race');
   // Don't start the clock while a curtain is still covering the gate.
   scene.setHeld(true);
-  void transitionDone().then(() => { if (race) scene.setHeld(false); });
+  void transitionDone().then(() => { if (race) { scene.setHeld(false); gateBell(); } });
   if (net) {
     // Family races start hand-ridden (every device agrees); keep your solo preference.
     const keep = rideAuto;
@@ -1702,6 +1704,12 @@ $('rn-barn').addEventListener('click', openBarn);
 $('rn-race').addEventListener('click', () => $('go-race').click());
 $('st-to-ranch').addEventListener('click', () => { home = 'ranch'; show('ranch'); });
 $('rn-mode').addEventListener('click', () => setSteering(!ranch?.tapMode));
+// Sound: unlock on the first tap (browsers require it); mute toggle on the ranch.
+window.addEventListener('pointerdown', unlockAudio, { capture: true });
+window.addEventListener('keydown', unlockAudio, { capture: true });
+const renderMute = () => { $('rn-sound').textContent = isMuted() ? '🔇' : '🔊'; $('rn-sound').setAttribute('aria-label', isMuted() ? 'Turn sound on' : 'Turn sound off'); };
+$('rn-sound').addEventListener('click', () => { setMuted(!isMuted()); renderMute(); });
+renderMute();
 {
   // Floating thumb stick: touch down anywhere on the open field (either thumb) and
   // the stick jumps under your finger and steers from there. When you let go it

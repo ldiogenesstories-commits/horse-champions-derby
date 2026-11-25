@@ -771,3 +771,4 @@ button.st-nameplate.editable { cursor: pointer; }
 .fx-finish.win .fx-place { color: #FFFBF2; }
 .fx-line { margin-top: 4px; font-size: clamp(20px, 5vmin, 34px); font-weight: 900; letter-spacing: 3px; }
 .fx-name { margin-top: 4px; font-size: clamp(14px, 3.4vmin, 20px); font-weight: 700; opacity: .8; }
+.rn-sound { align-self: flex-end; padding: 6px 10px; font-size: 16px; }
