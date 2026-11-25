@@ -6,15 +6,16 @@
 import type { Race } from '../sim/race';
 import type { HorseDef, HorseState } from '../sim/types';
 import { trackPoint } from '../sim/track';
-import { DEFAULT_LOOK, horseBodySVG } from './horseBody';
-import { DEFAULT_JOCKEY, riderSVG, type Jockey, type SilksPattern } from './jockey';
+import { DEFAULT_LOOK } from './horseBody';
+import { DEFAULT_JOCKEY, type Jockey, type SilksPattern } from './jockey';
 import { portraitSVG } from './portrait';
 import { horseFrontSVG } from './horseFront';
+import { puppetFrames } from './puppet';
 
-const FRAMES = 8; // gallop poses per horse
+const FRAMES = 12; // gallop poses per horse
 const STRIDE_M = 7; // metres per full gallop cycle
 const HORSE_M = 3.4; // how many track metres one horse sprite spans
-const SPRITE_W = 300; // px each pose is rendered at
+const SPRITE_W = 420; // px each pose is rendered at
 const PATTERNS: SilksPattern[] = ['hoops', 'stripes', 'diamonds', 'stars', 'chevron', 'halves', 'sash', 'solid'];
 
 type Shot = 'track' | 'aerial' | 'close' | 'rail' | 'headon' | 'winner';
@@ -43,7 +44,7 @@ export class Broadcast {
   private ctx: CanvasRenderingContext2D;
   private ui: HTMLElement;
   private race: Race | null = null;
-  private frames = new Map<string, HTMLImageElement[]>();
+  private frames = new Map<string, CanvasImageSource[]>();
   private fronts = new Map<string, HTMLImageElement[]>();
   private pl = 0;
   private focus = '';
@@ -83,9 +84,8 @@ export class Broadcast {
     const jobs = race.horses.map(async (h) => {
       const j = jockeys.get(h.def.id) ?? cpuJockey(h.def);
       if (jockeys.has(h.def.id) && j.name && j.name !== 'You') this.names.set(h.def.id, j.name);
-      const imgs = await Promise.all(Array.from({ length: FRAMES }, (_, f) =>
-        loadImage(horseBodySVG(h.def, h.def.look ?? DEFAULT_LOOK, { pose: f / FRAMES, rider: riderSVG(j) }).replace('<svg ', `<svg width="${SPRITE_W}" height="${Math.round(SPRITE_W * 290 / 320)}" `))));
-      this.frames.set(h.def.id, imgs);
+      // Side-on: the jointed felt puppet (recoloured for this horse's coat and rider's silks).
+      this.frames.set(h.def.id, await puppetFrames(h.def, j, FRAMES, SPRITE_W));
       this.fronts.set(h.def.id, await Promise.all(Array.from({ length: FRONT_FRAMES }, (_, f) =>
         loadImage(horseFrontSVG(h.def, h.def.look ?? DEFAULT_LOOK, j, f / FRONT_FRAMES).replace('<svg ', '<svg width="200" height="270" ')))));
     });
@@ -297,8 +297,9 @@ export class Broadcast {
       const pose = moving ? Math.floor(((hs.dist / STRIDE_M) % 1) * FRAMES) : 0;
       if (moving && Math.random() < dt * 14) this.dust.push({ x: x - sw * 0.35, y: y - 4, r: 4 + Math.random() * 6, life: 0.6 });
       g.drawImage(imgs[pose], x - sw / 2, y - sh * 0.93, sw, sh);
-      const bx = x - sw * 0.06;
-      const by = y - sh * 0.6;
+      // Number cloth on the barrel, below the rider.
+      const bx = x - sw * 0.1;
+      const by = y - sh * 0.47;
       g.fillStyle = hs.def.color; g.strokeStyle = '#2B2118'; g.lineWidth = 2;
       g.beginPath(); g.arc(bx, by, 11 * depth, 0, Math.PI * 2); g.fill(); g.stroke();
       g.fillStyle = isLight(hs.def.color) ? '#2B2118' : '#FFFBF2';
