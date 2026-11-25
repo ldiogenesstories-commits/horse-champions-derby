@@ -25,6 +25,8 @@ const sexIcon = (h: HorseDef) => (sexOf(h) === 'mare' ? '♀ Mare' : '♂ Stalli
 
 export function runBreeding(root: HTMLElement, o: {
   hall: RetiredCard[];
+  /** First horses: no Hall yet, so the mother is a visiting mare too. */
+  starter?: boolean;
   preselect?: string; // card code
   seed: number;
   /** Called with the new foal. Return an error message to stay on this screen (e.g. a shared-limit refusal). */
@@ -54,11 +56,25 @@ export function runBreeding(root: HTMLElement, o: {
     </button>`;
 
   function stepParent(): void {
+    if (o.starter) { stepStarterMare(); return; }
     root.innerHTML = top('Choose a parent', 'Retired horses can pass their talents on to a foal.')
       + `<div class="br-list">${o.hall.map((c) => row(c.horse, `data-code="${c.code}"`, `${c.rank} · ${c.record.w}–${c.record.p}–${c.record.s} · ${foalsNote(c)}`, { off: !c.guest && homeFoalsLeft(c.horse) === 0 })).join('')}</div>`;
     $('br-back').addEventListener('click', o.onBack);
     root.querySelectorAll<HTMLButtonElement>('[data-code]:not([disabled])').forEach((b) => b.addEventListener('click', () => {
       parent = o.hall.find((c) => c.code === b.dataset.code);
+      stepPartner();
+    }));
+  }
+
+  /** Starter breeding: pick one of three visiting mares as the mother. */
+  function stepStarterMare(): void {
+    const mares = visitingPartners(o.seed + 101, 'mare').filter((v) => !v.premier);
+    const cards = mares.map((v, i) => ({ code: `STARTER${i}`, horse: v.horse, rank: v.rank, record: { w: 0, p: 0, s: 0 }, starterNote: v.note } as unknown as RetiredCard & { starterNote: string }));
+    root.innerHTML = top('Breed your horse', 'Your first horses come from visiting horses. Pick a mother, then a father.')
+      + `<div class="br-list">${cards.map((c) => row(c.horse, `data-code="${c.code}"`, `${c.starterNote} Free.`)).join('')}</div>`;
+    $('br-back').addEventListener('click', o.onBack);
+    root.querySelectorAll<HTMLButtonElement>('[data-code]').forEach((b) => b.addEventListener('click', () => {
+      parent = cards.find((c) => c.code === b.dataset.code);
       stepPartner();
     }));
   }

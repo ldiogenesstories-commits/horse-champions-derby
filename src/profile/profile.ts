@@ -104,17 +104,24 @@ export function freshSave(horse: { stats: unknown; boldness: number }): string {
   return JSON.stringify({ horse, stats: horse.stats, confidence: horse.boldness, confCap: Math.min(100, horse.boldness + 15) });
 }
 
+let started = false;
 /**
- * First run on this version: the current game becomes horse #1 and a second starter
- * horse joins it. Counts past races toward the free-horse unlock.
+ * First run: two empty stalls, and your first two horses are bred one at a time.
+ * A game saved before stables existed becomes horse #1, with the second stall empty.
  */
-export function initStable(makeStarter: () => { stats: unknown; boldness: number }, pastRaces: number): void {
-  if (stable.horses.length) return;
+export function initStable(hasSave: boolean, pastRaces: number): void {
+  try { started = !!localStorage.getItem(STABLE_KEY); } catch { started = false; }
+  if (started) return;
+  started = true;
   const first = newId();
-  stable = { activeId: first, horses: [{ id: first, save: null }, { id: newId(), save: freshSave(makeStarter()) }] };
+  stable = hasSave ? { activeId: first, horses: [{ id: first, save: null }] } : { activeId: '', horses: [] };
   saveStable();
   if (!profile.totalRaces && pastRaces) { profile.totalRaces = pastRaces; changed(); }
 }
+/** No horses yet: a brand new player who still has to breed their first one. */
+export const hasHorse = () => stable.horses.length > 0;
+/** Your first two horses must be bred (no random horses until then). */
+export const mustBreed = () => stable.horses.length < START_SLOTS;
 
 export const activeId = () => stable.activeId;
 export const horseCount = () => stable.horses.length;

@@ -40,7 +40,7 @@ import { SHARED_FOAL_LIMIT } from './career/breeding';
 import { showPedigree } from './career/pedigreeView';
 import { playIntro, shouldPlayIntro } from './intro/intro';
 import {
-  SAVE_KEY, countRace, earn, emptySlots, freshSave, initStable, placeNewHorse, prizeFor, spend,
+  SAVE_KEY, countRace, hasHorse, mustBreed, earn, emptySlots, freshSave, initStable, placeNewHorse, prizeFor, spend,
   summaries, switchTo, takeNextScreen, wallet,
 } from './profile/profile';
 import { ownedDecor } from './profile/shop';
@@ -821,10 +821,12 @@ const allNames = (): string[] => [...hall.map((h) => h.horse.name), ...summaries
 const liveSummary = () => ({ name: player.name, coat: player.coat, races: raceCount, wins: record.w, retired: activeRetired(), horse: player });
 
 function openBreeding(preselect?: string): void {
-  if (!hall.length) return;
+  // Your first two horses are bred from visiting horses (one at a time).
+  const starter = !preselect && (mustBreed() || !hall.length);
   show('breed');
   runBreeding($('breed-root'), {
     hall,
+    starter,
     preselect,
     seed: Date.now() % 100000,
     wallet,
@@ -848,7 +850,7 @@ function openBreeding(preselect?: string): void {
       saveHall();
       return newHorse(foal);
     },
-    onBack: () => (preselect ? retire() : renderHall()),
+    onBack: () => (preselect ? retire() : starter || fromMenu ? (fromMenu = false, show('menu')) : renderHall()),
   });
 }
 
@@ -1444,6 +1446,7 @@ function openFamily(mode: 'family' | 'big' = 'family', joinAsScreen?: string): v
     onBack: () => { lobby?.leave(); lobby = null; net = null; if (fromMenu || mode === 'big') { fromMenu = false; show('menu'); } else show('pre'); },
     mode,
     joinAsScreen,
+    canRide: hasHorse(),
   });
 }
 
@@ -1868,6 +1871,8 @@ renderMute();
   stage.addEventListener('lostpointercapture', end);
 }
 
+let hadSave = false;
+try { hadSave = !!localStorage.getItem(SAVE_KEY); } catch { /* storage blocked */ }
 load();
 player.look = look;
 // Welcome a shining-star foal the first time we see it.
@@ -1882,12 +1887,13 @@ if (sparksOf(player).length && raceCount === 0 && day === 1) {
 applyJockey();
 // First run with the multi-horse stable: this horse is #1 and a second starter joins it.
 initStable(
-  () => makeFoal((Date.now() + 7) % 100000, [...hall.map((h) => h.horse.name), player.name]),
+  hadSave,
   raceCount + hall.filter((h) => !h.guest).reduce((t, h) => t + h.races, 0),
 );
 /** Back to the active horse: its retirement ceremony if its career is over, else the ranch/stable. */
 function continueGame(): void {
   fromMenu = false;
+  if (!hasHorse()) { openBreeding(); return; }
   if (activeRetired()) retire(); else show('stable');
 }
 homeMenu = runHome($('menu-root'), {
@@ -1897,8 +1903,10 @@ homeMenu = runHome($('menu-root'), {
   live: liveSummary,
   summaries: () => summaries(liveSummary()),
   hallCount: () => hall.length,
+  hasHorse,
+  mustBreed,
   onContinue: continueGame,
-  onFamily: () => { fromMenu = true; openFamily('family'); },
+  onFamily: () => { fromMenu = true; if (hasHorse()) openFamily('family'); else openBreeding(); },
   onBigScreen: () => { fromMenu = true; openFamily('big'); },
   onHall: () => { fromMenu = true; renderHall(); },
   onIntro: () => playIntro(() => show('menu')),
@@ -1912,6 +1920,7 @@ homeMenu = runHome($('menu-root'), {
   onNewHorse: (kind) => {
     if (!roomForHorse()) return STABLE_FULL;
     if (kind === 'breed') { fromMenu = true; openBreeding(); return; }
+    if (mustBreed()) return 'Breed your first two horses. Random horses open up after that.';
     return newHorse();
   },
 });
