@@ -80,6 +80,17 @@ const FRONT: Part[] = [
   { id: 'legL', src: 'f_leg_l', parent: 'chest', pivot: [62, 49], at: [78, 690], z: 14, tint: 'coat' },
   { id: 'legR', src: 'f_leg_r', parent: 'chest', pivot: [105, 50], at: [335, 690], z: 14, tint: 'coat' },
 ];
+// Walking away: the rump fills the view, the head peeks over it, the front legs further back.
+const BACK: Part[] = [
+  { id: 'hips' },
+  { id: 'rump', src: 'b_rump', parent: 'hips', pivot: [301, 300], at: [0, 0], z: 10, tint: 'coat' },
+  { id: 'head', src: 'b_head', parent: 'rump', pivot: [158, 480], at: [301, 95], z: 2, s: 0.6, tint: 'coat' },
+  { id: 'frontL', src: 'b_front', parent: 'rump', pivot: [68, 47], at: [205, 560], z: 1, s: 0.72, tint: 'coat', far: true },
+  { id: 'frontR', src: 'b_front', parent: 'rump', pivot: [68, 47], at: [380, 560], z: 1, s: 0.72, tint: 'coat', far: true },
+  { id: 'legL', src: 'b_leg_l', parent: 'rump', pivot: [137, 777], at: [137, 777], z: 12, tint: 'coat' },
+  { id: 'legR', src: 'b_leg_r', parent: 'rump', pivot: [449, 777], at: [449, 777], z: 12, tint: 'coat' },
+  { id: 'tail', src: 'b_tail', parent: 'rump', pivot: [60, 20], at: [250, 60], z: 14, tint: 'mane' },
+];
 const drawOrder = (parts: Part[]) => parts.filter((p) => p.src).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
 export type PuppetMode = 'gallop' | 'walk' | 'stand' | 'graze' | 'lie';
@@ -133,9 +144,24 @@ function frontPose(ph: number, mode: PuppetMode = 'gallop'): Pose {
   };
 }
 
+/** Walking away: hind feet lift and fold away from the camera, tail swishes, head nods. */
+function backPose(ph: number, mode: PuppetMode = 'walk'): Pose {
+  const a = ph * Math.PI * 2;
+  const s = Math.sin;
+  const up = (x: number) => Math.max(0, s(x));
+  const k = mode === 'gallop' ? 1 : mode === 'walk' ? 0.5 : 0;
+  const leg = (id: string, off: number, lift: number) => ({ [`${id}.y`]: -lift * k * up(a + off), [`${id}.sy`]: 1 - 0.3 * k * up(a + off) });
+  return {
+    'hips.y': -10 * k * Math.abs(s(a)), hips: 2 * k * s(a),
+    ...leg('legL', 0, 110), ...leg('legR', Math.PI, 110), ...leg('frontL', Math.PI / 2, 70), ...leg('frontR', -Math.PI / 2, 70),
+    tail: 8 * s(a + 0.5), 'head.y': 10 * k * s(2 * a),
+  };
+}
+
 interface Rig { parts: Part[]; pose: (ph: number, mode?: PuppetMode) => Pose; flip: boolean; fit: (W: number, H: number, base: number) => { k: number; root: Vec } }
 const RIGS = {
   side: { parts: SIDE, pose: sidePose, flip: true, fit: (W: number, H: number, base: number) => { const k = (0.98 * W) / 1850; return { k, root: [W / 2 - 75 * k, base * H - 893 * k] as Vec }; } },
+  back: { parts: BACK, pose: backPose, flip: false, fit: (W: number, H: number, base: number) => { const k = (0.9 * H) / 1340; return { k, root: [W / 2, base * H - 886 * k] as Vec }; } },
   front: { parts: FRONT, pose: frontPose, flip: false, fit: (W: number, H: number, base: number) => { const k = (0.9 * H) / 1800; return { k, root: [W / 2, base * H - 1023 * k] as Vec }; } },
 } satisfies Record<string, Rig>;
 
@@ -276,4 +302,10 @@ export async function puppetFrames(def: HorseDef, j: Jockey | null, frames: numb
 export async function puppetFrontFrames(def: HorseDef, j: Jockey | null, frames: number, width: number, height: number, o: PuppetOpts = {}): Promise<HTMLCanvasElement[]> {
   const order = orderFor(FRONT, !!j);
   return bake(RIGS.front, await partsFor(def, j, order), order, frames, width, height, o.mode ?? 'gallop', o.base ?? 0.96);
+}
+
+/** Walking-away poses (no rider), width × height, hooves on 96% of the height by default. */
+export async function puppetBackFrames(def: HorseDef, frames: number, width: number, height: number, o: PuppetOpts = {}): Promise<HTMLCanvasElement[]> {
+  const order = orderFor(BACK, false);
+  return bake(RIGS.back, await partsFor(def, null, order), order, frames, width, height, o.mode ?? 'walk', o.base ?? 0.96);
 }
