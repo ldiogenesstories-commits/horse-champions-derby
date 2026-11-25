@@ -20,6 +20,8 @@ interface LobbyOpts {
   mode?: 'family' | 'big';
   /** Join this room straight away as the big screen (from a ?screen=CODE link). */
   joinAsScreen?: string;
+  /** False when there's no horse to race yet (this device can still be the big screen). */
+  canRide?: boolean;
 }
 
 const MAX_HORSES = 8;
@@ -67,8 +69,8 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
       <p class="sub">Show the race broadcast on a TV or computer and ride from your phone.</p>
       <div class="card">
         <div class="card-title">On your phone</div>
-        <button class="big go lb-wide" id="lb-create">Use this phone to ride</button>
-        <p class="muted">You'll get a code to type on the big screen.</p>
+        ${o.canRide === false ? '<p class="muted">Breed your first horse to ride. This device can still be the big screen.</p>' : `<button class="big go lb-wide" id="lb-create">Use this phone to ride</button>
+        <p class="muted">You'll get a code to type on the big screen.</p>`}
       </div>
       <div class="card">
         <div class="card-title">On the TV or computer</div>
@@ -77,7 +79,7 @@ export function runLobby(root: HTMLElement, o: LobbyOpts): Lobby {
       </div>
       <p class="muted lb-status" id="lb-status"></p>`;
     $('lb-back').addEventListener('click', o.onBack);
-    $('lb-create').addEventListener('click', () => enter(makeRoomCode(), false, true));
+    $('lb-create')?.addEventListener('click', () => enter(makeRoomCode(), false, true));
     const join = () => {
       const c = normalizeCode(($('lb-code') as HTMLInputElement).value);
       if (c.length < 4) { $('lb-status').textContent = 'Type the code shown on your phone.'; return; }

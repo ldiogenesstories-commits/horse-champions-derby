@@ -32,6 +32,9 @@ export interface HomeOpts {
   live: () => Omit<HorseSummary, 'id' | 'active'>;
   summaries: () => HorseSummary[];
   hallCount: () => number;
+  hasHorse: () => boolean;
+  /** Still breeding the first two horses (no random horses yet). */
+  mustBreed: () => boolean;
   onContinue: () => void;
   onFamily: () => void;
   onBigScreen: () => void;
@@ -87,10 +90,13 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
       <div class="hm-logo">${LOGO}</div>
       <div class="hm-horse" id="hm-horse"></div>
       <div class="hm-panel">
-        <button class="hm-continue" id="hm-continue">
+        ${o.hasHorse() ? `<button class="hm-continue" id="hm-continue">
           <span class="hm-face">${portraitSVG(o.horse(), 52)}</span>
           <span><b>Continue</b><small>${esc(l.name)} · ${status}</small></span>
-        </button>
+        </button>` : `<button class="hm-continue" id="hm-continue">
+          <span class="hm-face hm-stall">🐣</span>
+          <span><b>Breed your first horse</b><small>Pick a mare and a stallion to start your stable</small></span>
+        </button>`}
         <div class="hm-grid">
           <button class="hm-btn" data-go="stable"><i>🐴</i>My Stable</button>
           <button class="hm-btn" data-go="family"><i>👪</i>Family Race</button>
@@ -115,7 +121,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
       else go(g as Page);
     }));
     horseKey = '';
-    void drawHorse();
+    if (o.hasHorse()) void drawHorse();
   }
 
   async function drawHorse(): Promise<void> {
@@ -152,9 +158,9 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
     const empties = Array.from({ length: emptySlots() }, () => `
       <div class="hm-hcard empty">
         <span class="hm-face hm-stall">🚪</span>
-        <span class="hm-hinfo"><b>Empty stall</b><small>Bring in a new horse</small></span>
-        <span class="hm-two"><button class="big go small-btn" data-new="random">Random horse</button>
-        ${o.hallCount() ? '<button class="big ghost small-btn" data-new="breed">Breed</button>' : ''}</span>
+        <span class="hm-hinfo"><b>Empty stall</b><small>${o.mustBreed() ? 'Breed a foal to fill it' : 'Bring in a new horse'}</small></span>
+        <span class="hm-two">${o.mustBreed() ? '<button class="big go small-btn" data-new="breed">Breed a foal</button>'
+          : `<button class="big go small-btn" data-new="random">Random horse</button>${o.hallCount() ? '<button class="big ghost small-btn" data-new="breed">Breed</button>' : ''}`}</span>
       </div>`).join('');
     let locked = '';
     if (p.slots < MAX_SLOTS) {
@@ -234,7 +240,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
     { ico: '🏁', title: 'Race day', text: 'Pick a race plan, then ride: hold to save energy, whip in the final stretch. Prize money is paid for 1st to 5th, and events pay extra.' },
     { ico: '🏆', title: 'Hall of Fame', text: 'After 25 races your horse retires with a card. Share its code or QR so family can add it to their Hall too.' },
     { ico: '🧬', title: 'Breeding', text: 'Pair a retiree with a visiting horse or another Hall horse. Foals inherit coats, markings, stats and star traits. Champion ancestors lift hidden peaks.' },
-    { ico: '🐎', title: 'Your stable', text: `Start with 2 horses. Earn a free stall after ${FREE_HORSE_RACES} races, or buy one for ${hd(NEW_HORSE_COST)}. Up to ${MAX_SLOTS} horses.` },
+    { ico: '🐎', title: 'Your stable', text: `You start with 2 empty stalls and breed your first 2 horses, one at a time, from visiting horses. Earn a free stall after ${FREE_HORSE_RACES} races, or buy one for ${hd(NEW_HORSE_COST)}. Up to ${MAX_SLOTS} horses.` },
     { ico: '👪', title: 'Family Race and Big Screen', text: 'Family Race: everyone races from their own phone. Big Screen: show the race on a TV or computer and steer from your phone.' },
     { ico: '🛍️', title: 'The Shop', text: 'Spend Horse Dollars on ribbon colors, saddle pads, silks patterns and barn decor.' },
   ];
