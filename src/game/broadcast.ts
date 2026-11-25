@@ -22,6 +22,7 @@ const SHOT_LABEL: Record<Shot, string> = { track: 'TRACKSIDE', aerial: 'AERIAL V
 // The director's rotation between big moments (seconds of race time per shot).
 const PLAYLIST: [Shot, number][] = [['track', 6], ['close', 4.5], ['track', 4], ['rail', 4], ['headon', 5], ['track', 5], ['close', 4], ['aerial', 4.5]];
 const FRONT_FRAMES = 8;
+const FX_LEN = 1.7; // seconds the final-stretch freeze holds
 
 interface Cut { until: number; html: string }
 
@@ -43,6 +44,10 @@ export class Broadcast {
   private focusTurn = 0;
   private railAt = 0;
   private finale = false;
+  /** The final-stretch freeze: a comic-book beat 100 m out (runs once per race). */
+  private fx: { start: number; hero: string; snap: Map<string, { dist: number; lane: number }> } | null = null;
+  private fxDone = false;
+  private sil = new WeakMap<CanvasImageSource, HTMLCanvasElement>();
   private camLane = 3;
   private names = new Map<string, string>(); // horse id -> jockey name (family players)
   private raf = 0;
@@ -97,6 +102,8 @@ export class Broadcast {
     this.shotUntil = 3; // the break, from above
     this.pl = 0;
     this.finale = false;
+    this.fx = null;
+    this.fxDone = false;
     this.focusTurn = 0;
     this.leaderCutAt = -99;
     this.lastLeaderCut = -1;
@@ -186,6 +193,120 @@ export class Broadcast {
     if (this.cut && t > this.cut.until) { this.cut = null; (this.ui.querySelector('#bc-cut') as HTMLElement).hidden = true; }
   }
 
+  /** A black cut-out of a pose (cached), for shadow-puppet rivals and ink outlines. */
+  private silhouette(img: CanvasImageSource & { width: number; height: number }): HTMLCanvasElement {
+    let c = this.sil.get(img);
+    if (!c) {
+      c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = '#17110C'; g.fillRect(0, 0, c.width, c.height);
+      this.sil.set(img, c);
+    }
+    return c;
+  }
+
+  /** Viewtiful moment: yellow burst, speed lines, rivals as shadow puppets, the leader inked in full colour, BREAKAWAY! */
+  private drawFinale(g: CanvasRenderingContext2D, r: Race, w: number, h: number, el: number): void {
+    const fx = this.fx!;
+    const hero = r.horses.find((x) => x.def.id === fx.hero)!;
+    const hs = fx.snap.get(hero.def.id)!;
+    const zoom = 1 + Math.min(1, el / FX_LEN) * 0.08;
+    g.save();
+    g.translate(w / 2, h / 2); g.scale(zoom, zoom); g.translate(-w / 2, -h / 2);
+    const vx = w * 0.64; const vy = h * 0.5;
+    const burst = g.createRadialGradient(vx, vy, 0, vx, vy, Math.max(w, h) * 0.8);
+    burst.addColorStop(0, '#FFF6C4'); burst.addColorStop(0.45, '#FFD23F'); burst.addColorStop(1, '#F59A23');
+    g.fillStyle = burst; g.fillRect(-w, -h, w * 3, h * 3);
+    // Speed lines radiating from behind the hero, creeping round.
+    g.strokeStyle = 'rgba(23,17,12,0.85)'; g.lineCap = 'round';
+    for (let i = 0; i < 40; i++) {
+      const a = (i / 40) * Math.PI * 2 + el * 0.15;
+      const r0 = Math.min(w, h) * (0.32 + (i % 3) * 0.06);
+      g.lineWidth = [2, 6, 3, 9][i % 4];
+      g.beginPath(); g.moveTo(vx + Math.cos(a) * r0, vy + Math.sin(a) * r0); g.lineTo(vx + Math.cos(a) * w * 1.6, vy + Math.sin(a) * w * 1.6); g.stroke();
+    }
+    // Halftone dots fading in from the bottom-left corner.
+    g.fillStyle = '#E8343F';
+    const step = Math.max(14, w / 70);
+    for (let y = h * 0.45; y < h + step; y += step) {
+      for (let x = (Math.floor(y / step) % 2) * step / 2; x < w * 0.55; x += step) {
+        const k = Math.max(0, 1 - Math.hypot(x / (w * 0.55), (h - y) / (h * 0.55)));
+        if (k > 0.05) { g.beginPath(); g.arc(x, y, step * 0.42 * k, 0, Math.PI * 2); g.fill(); }
+      }
+    }
+    // Shadow-puppet stage floor.
+    const ground = h * 0.8;
+    g.fillStyle = '#17110C'; g.fillRect(-w, ground, w * 3, h * 2);
+    const spriteH = h * 0.36;
+    const spriteW = spriteH * 320 / 290;
+    const poseOf = (dist: number) => Math.floor(((dist / STRIDE_M) % 1) * FRAMES);
+    // Rivals: black cut-outs, farthest lane first, around the hero.
+    const rivals = [...r.horses].filter((x) => x.def.id !== hero.def.id).sort((a, b) => fx.snap.get(b.def.id)!.lane - fx.snap.get(a.def.id)!.lane);
+    for (const rv of rivals) {
+      const sn = fx.snap.get(rv.def.id)!;
+      const imgs = this.frames.get(rv.def.id) as (HTMLCanvasElement[] | undefined);
+      if (!imgs) continue;
+      const depth = 0.8 + 0.03 * Math.min(7, sn.lane);
+      // Squeeze the field so the chasers stay in frame: the further back, the less extra room.
+      const gap = Math.max(0, hs.dist - sn.dist);
+      const x = vx - spriteW * 0.55 - Math.sqrt(gap) * w * 0.07;
+      const y = ground - (7 - Math.min(7, sn.lane)) * h * 0.012;
+      if (x < -spriteW || x > w + spriteW) continue;
+      g.drawImage(this.silhouette(imgs[poseOf(sn.dist)]), x - spriteW * depth / 2, y - spriteH * depth * 0.93, spriteW * depth, spriteH * depth);
+    }
+    // The hero in full colour with a thick ink outline and a hard drop shadow.
+    const himgs = this.frames.get(hero.def.id) as (HTMLCanvasElement[] | undefined);
+    if (himgs) {
+      const img = himgs[poseOf(hs.dist)];
+      const hw = spriteW * 1.55; const hh = spriteH * 1.55;
+      const hx = vx - hw / 2; const hy = ground + h * 0.02 - hh * 0.93;
+      const ink = this.silhouette(img);
+      g.drawImage(ink, hx + 10, hy + 8, hw, hh);
+      const o = Math.max(3, w / 320);
+      for (const [dx, dy] of [[-o, 0], [o, 0], [0, -o], [0, o], [-o, -o], [o, o], [-o, o], [o, -o]]) g.drawImage(ink, hx + dx, hy + dy, hw, hh);
+      g.drawImage(img, hx, hy, hw, hh);
+      // Close-up panel: the hero's head, top left.
+      const px0 = w * 0.04; const py0 = h * 0.08; const px1 = w * 0.4; const py1 = h * 0.42;
+      g.save();
+      g.beginPath(); g.moveTo(px0, py0); g.lineTo(px1, py0); g.lineTo(px1 - w * 0.05, py1); g.lineTo(px0, py1); g.closePath();
+      g.fillStyle = '#E8343F'; g.fill();
+      g.clip();
+      g.strokeStyle = 'rgba(255,210,63,0.8)'; g.lineWidth = 5;
+      for (let i = 0; i < 6; i++) { const y = py0 + (py1 - py0) * (0.15 + i * 0.15); g.beginPath(); g.moveTo(px0, y); g.lineTo(px0 + (px1 - px0) * (0.25 + (i % 3) * 0.1), y); g.stroke(); }
+      const zw = hw * 2.2; const zh = hh * 2.2;
+      g.drawImage(img, px1 - zw * 0.92, py0 - zh * 0.02, zw, zh);
+      g.restore();
+      g.lineJoin = 'round';
+      g.beginPath(); g.moveTo(px0, py0); g.lineTo(px1, py0); g.lineTo(px1 - w * 0.05, py1); g.lineTo(px0, py1); g.closePath();
+      g.strokeStyle = '#FFFBF2'; g.lineWidth = 12; g.stroke();
+      g.strokeStyle = '#17110C'; g.lineWidth = 5; g.stroke();
+    }
+    // Lettering.
+    const pop = Math.min(1, el / 0.25);
+    const size = h * 0.15 * (0.6 + 0.4 * pop);
+    g.save();
+    g.translate(w * 0.69, h * 0.2); g.rotate(-0.12);
+    g.font = `italic 900 ${Math.round(size)}px system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.fillStyle = '#17110C'; g.fillText('BREAKAWAY!', 10, 10);
+    g.strokeStyle = '#17110C'; g.lineWidth = size * 0.14; g.strokeText('BREAKAWAY!', 0, 0);
+    g.fillStyle = '#E8343F'; g.fillText('BREAKAWAY!', 0, 0);
+    g.restore();
+    const who = this.names.get(hero.def.id);
+    const cap = `No. ${hero.def.number} ${hero.def.name}${who ? ` · ${who}` : ''}`;
+    g.font = `900 ${Math.round(h * 0.035)}px system-ui, sans-serif`;
+    const tw = g.measureText(cap).width + 24;
+    g.fillStyle = '#17110C'; g.fillRect(w * 0.04, h * 0.44, tw, h * 0.06);
+    g.fillStyle = '#FFD23F'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(cap, w * 0.04 + 12, h * 0.47);
+    g.restore();
+    // White flash in and out.
+    const flash = el < 0.12 ? 1 - el / 0.12 : el > FX_LEN - 0.15 ? (el - (FX_LEN - 0.15)) / 0.15 : 0;
+    if (flash > 0) { g.fillStyle = `rgba(255,251,242,${flash})`; g.fillRect(0, 0, w, h); }
+  }
+
   private showCut(h: HorseState, caption: string, until: number): void {
     const el = this.ui.querySelector('#bc-cut') as HTMLElement;
     const who = this.names.get(h.def.id);
@@ -205,6 +326,28 @@ export class Broadcast {
     this.last = now;
     this.direct(r);
     this.graphics(r);
+    // The drive home: freeze for a beat, rivals in shadow, the leader in full colour.
+    const left = r.distance - Math.max(...r.horses.map((x) => x.dist));
+    if (!this.fxDone && !r.finished && r.t > 4 && left < 110) {
+      this.fxDone = true;
+      const hero = r.standings()[0];
+      this.fx = { start: now, hero: hero.def.id, snap: new Map(r.horses.map((x) => [x.def.id, { dist: x.dist, lane: x.lane }])) };
+      (this.ui.querySelector('#bc-cut') as HTMLElement | null)?.setAttribute('hidden', '');
+    }
+    if (this.fx) {
+      const el = (now - this.fx.start) / 1000;
+      if (el < FX_LEN) {
+        const c0 = this.canvas;
+        const dpr0 = Math.min(window.devicePixelRatio || 1, 2);
+        c0.style.display = 'block';
+        if (c0.width !== Math.round(c0.clientWidth * dpr0) || c0.height !== Math.round(c0.clientHeight * dpr0)) { c0.width = Math.round(c0.clientWidth * dpr0); c0.height = Math.round(c0.clientHeight * dpr0); }
+        this.ctx.setTransform(dpr0, 0, 0, dpr0, 0, 0);
+        this.drawFinale(this.ctx, r, c0.clientWidth, c0.clientHeight, el);
+        return;
+      }
+      this.fx = null;
+      this.canvas.style.display = this.shot === 'aerial' ? 'none' : 'block';
+    }
     if (this.shot === 'aerial') return;
     const c = this.canvas;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
