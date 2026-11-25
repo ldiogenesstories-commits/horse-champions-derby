@@ -740,3 +740,34 @@ button.st-nameplate.editable { cursor: pointer; }
 .tx-ground { position: absolute; inset: 0; background: #7FB069; clip-path: inset(100% 0 0 0); }
 .tx-bit { position: absolute; transform: translate(-50%,-100%) scale(0); opacity: 0; line-height: 0; }
 .tx-bit svg { display: block; }
+
+/* ---------- Finish splash (comic freeze-frame) ---------- */
+#race.fx-frozen #stage { filter: saturate(.25) contrast(1.15) brightness(.9); transition: filter .15s; }
+.fx-finish { position: fixed; inset: 0; z-index: 900; pointer-events: none; overflow: hidden; display: grid; place-items: center; --silk: #C8452D; }
+.fx-flash { position: absolute; inset: 0; background: #FFFBF2; opacity: 0; }
+.fx-burst {
+  position: absolute; width: 160vmax; height: 160vmax; left: 50%; top: 50%; margin: -80vmax 0 0 -80vmax; opacity: .4;
+  background: radial-gradient(circle, var(--silk) 0 10%, transparent 34%),
+              radial-gradient(circle, #2B2118 1.2px, transparent 1.6px) 0 0 / 10px 10px;
+  -webkit-mask: radial-gradient(circle, #000 0 30%, transparent 62%); mask: radial-gradient(circle, #000 0 30%, transparent 62%);
+}
+.fx-lines {
+  position: absolute; width: 200vmax; height: 200vmax; left: 50%; top: 50%; margin: -100vmax 0 0 -100vmax; opacity: .35;
+  background: repeating-conic-gradient(from 0deg, #2B2118 0 1.2deg, transparent 1.2deg 9deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 40%); mask: radial-gradient(circle, transparent 0 22%, #000 40%);
+}
+.fx-band {
+  position: relative; width: 120vw; padding: 14px 0 18px; text-align: center; transform: skewY(-8deg);
+  background: var(--paper); border-top: 6px solid #2B2118; border-bottom: 6px solid #2B2118;
+  box-shadow: 0 10px 0 var(--silk), 0 16px 0 #2B2118;
+  font-family: var(--display); line-height: 1; color: #2B2118;
+}
+.fx-finish.win .fx-band { background: #FFD23F; }
+.fx-finish.top3 .fx-band { background: #FFFBF2; }
+.fx-place {
+  font-size: clamp(64px, 19vmin, 150px); font-weight: 900; font-style: italic; letter-spacing: 2px;
+  color: var(--silk); -webkit-text-stroke: 4px #2B2118; paint-order: stroke fill; text-shadow: 6px 6px 0 #2B2118;
+}
+.fx-finish.win .fx-place { color: #FFFBF2; }
+.fx-line { margin-top: 4px; font-size: clamp(20px, 5vmin, 34px); font-weight: 900; letter-spacing: 3px; }
+.fx-name { margin-top: 4px; font-size: clamp(14px, 3.4vmin, 20px); font-weight: 700; opacity: .8; }

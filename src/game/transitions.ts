@@ -7,6 +7,9 @@ export type TransitionKind = 'curtain' | 'nature';
 const CURTAINS = ['split', 'drop', 'swag'] as const;
 let nextCurtain = 0;
 let busy = false;
+let current: Promise<void> = Promise.resolve();
+/** Resolves when the transition that's playing (if any) has fully uncovered the screen. */
+export const transitionDone = (): Promise<void> => current;
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -29,8 +32,13 @@ const LOGO = `
 </div>`;
 
 /** Cover the screen, run `swap` while hidden, then reveal. Ignored if one is already playing. */
-export async function playTransition(kind: TransitionKind, swap: () => void): Promise<void> {
-  if (busy) { swap(); return; }
+export function playTransition(kind: TransitionKind, swap: () => void): Promise<void> {
+  if (busy) { swap(); return current; }
+  current = playIt(kind, swap);
+  return current;
+}
+
+async function playIt(kind: TransitionKind, swap: () => void): Promise<void> {
   busy = true;
   const root = document.createElement('div');
   root.className = 'tx';
@@ -148,3 +156,41 @@ const SPRITES: Record<'tree' | 'flower' | 'tuft', (r: number) => string> = {
   tree: (r) => `<svg width="70" height="92" viewBox="0 0 70 92"><rect x="29" y="54" width="12" height="36" rx="3" fill="#8A5A3B" stroke="#2B2118" stroke-width="2.5"/>
     <g fill="${r < 0.5 ? '#4F8A4E' : '#5E9B5A'}" stroke="#2B2118" stroke-width="2.5"><circle cx="35" cy="22" r="19"/><circle cx="18" cy="42" r="16"/><circle cx="52" cy="42" r="16"/><circle cx="35" cy="48" r="16"/></g></svg>`,
 };
+
+// ---------- Finish splash ----------
+// A Viewtiful Joe-style comic beat when your horse crosses the line: colour drains
+// from the race, a slanted panel slams in with your placing, then it clears.
+export async function playFinishSplash(o: { place: number; ord: string; name: string; color: string; hold?: number }): Promise<void> {
+  const root = document.createElement('div');
+  const big = o.place === 1;
+  const top3 = o.place <= 3;
+  const ord = o.ord;
+  const line = big ? 'WINNER!' : top3 ? 'WHAT A RUN!' : 'FINISHED!';
+  root.className = `fx-finish${big ? ' win' : top3 ? ' top3' : ''}`;
+  root.style.setProperty('--silk', o.color);
+  root.innerHTML = `<div class="fx-flash"></div><div class="fx-burst"></div><div class="fx-lines"></div>
+    <div class="fx-band"><div class="fx-place">${ord.toUpperCase()}${top3 ? '!' : ''}</div><div class="fx-line">${line}</div><div class="fx-name">${o.name.replace(/[<>&]/g, '')}</div></div>`;
+  document.body.append(root);
+  const race = document.getElementById('race');
+  race?.classList.add('fx-frozen');
+  try {
+    if (reduced()) {
+      await run(root, [{ opacity: 0 }, { opacity: 1 }], { duration: 150 });
+      await wait(o.hold ?? 1300);
+    } else {
+      const band = root.querySelector('.fx-band')!;
+      const place = root.querySelector('.fx-place')!;
+      run(root.querySelector('.fx-flash')!, [{ opacity: 0.95 }, { opacity: 0 }], { duration: 260, easing: 'ease-out' });
+      run(root.querySelector('.fx-burst')!, [{ transform: 'scale(.2) rotate(-20deg)', opacity: 0 }, { transform: 'scale(1) rotate(0)', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2,1.4,.4,1)' });
+      run(root.querySelector('.fx-lines')!, [{ transform: 'rotate(0)' }, { transform: 'rotate(8deg)' }], { duration: 1800, easing: 'linear' });
+      run(band, [{ transform: 'translateX(-120%) skewY(-8deg)' }, { transform: 'translateX(4%) skewY(-8deg)', offset: 0.75 }, { transform: 'translateX(0) skewY(-8deg)' }], { duration: 300, easing: 'ease-out' });
+      await run(place, [{ transform: 'scale(2.6)', opacity: 0 }, { transform: 'scale(.92)', opacity: 1, offset: 0.7 }, { transform: 'scale(1)', opacity: 1 }], { duration: 360, delay: 140, easing: 'ease-out' });
+      if (big) run(root, [{ transform: 'translate(0,0)' }, { transform: 'translate(-6px,4px)' }, { transform: 'translate(5px,-3px)' }, { transform: 'translate(-3px,2px)' }, { transform: 'translate(0,0)' }], { duration: 260 });
+      await wait(o.hold ?? 1100);
+      await run(root, [{ opacity: 1 }, { opacity: 0 }], { duration: 260, easing: 'ease-in' });
+    }
+  } finally {
+    root.remove();
+    race?.classList.remove('fx-frozen');
+  }
+}

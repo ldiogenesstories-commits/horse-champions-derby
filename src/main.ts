@@ -11,7 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { playTransition, type TransitionKind } from './game/transitions';
+import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
 import { runSteadyGallop } from './training/steadyGallop';
@@ -121,9 +121,12 @@ function transitionFor(from: Screen | undefined, to: Screen): TransitionKind | n
   if ((from === 'ranch' || from === 'stable') && to === 'pre') return 'curtain'; // heading to the races
   if (from === 'results' && (to === 'ranch' || to === 'stable' || to === 'retire' || to === 'family')) return 'curtain'; // back home
   if (from === 'stable' && to === 'ranch') return 'nature'; // out of the barn into the field
+  if ((from === 'pre' || from === 'results') && to === 'race') return 'curtain'; // into the gate
+  if (from === 'race' && (to === 'results' || to === 'family')) return 'curtain'; // race over
   return null;
 }
 let pendingScreen: Screen | null = null;
+let finishSplashed = false;
 function show(id: Screen): void {
   if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
   // A transition is already covering the screen: just retarget where it lands.
@@ -282,7 +285,11 @@ function launchRace(narratorSeed: number): void {
   lastCallId = -1;
   lastTickMs = performance.now();
   setCall('Horses are loading into the gate…', 'info');
+  finishSplashed = false;
   show('race');
+  // Don't start the clock while a curtain is still covering the gate.
+  scene.setHeld(true);
+  void transitionDone().then(() => { if (race) scene.setHeld(false); });
   if (net) {
     // Family races start hand-ridden (every device agrees); keep your solo preference.
     const keep = rideAuto;
@@ -402,6 +409,11 @@ const hooks = {
     }
     const p = r.player;
     if (!p) { tickNarration(r); return; }
+    if (p.finished && !finishSplashed && !net?.tv) {
+      finishSplashed = true;
+      if (!net) scene.freeze(1700); // solo: true freeze-frame; family races keep running for everyone
+      void playFinishSplash({ place: p.place, ord: ordinal(p.place), name: player.name, color: p.def.color });
+    }
     renderRibbon(r);
     $('b-energy').style.width = `${p.energy}%`;
     $('b-conf').style.width = `${p.confidence}%`;
