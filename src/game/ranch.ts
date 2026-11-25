@@ -4,8 +4,7 @@
 // Steering: an on-screen thumb stick (or tap-to-go), plus arrow keys / WASD.
 import type { HorseDef } from '../sim/types';
 import type { Look } from './horseBody';
-import { horseBackSVG } from './horseBack';
-import { puppetFrames, puppetFrontFrames } from './puppet';
+import { puppetBackFrames, puppetFrames, puppetFrontFrames } from './puppet';
 
 const INK = '#2B2118';
 const PAPER = '#FFFBF2';
@@ -52,15 +51,6 @@ const JUMP_SPEED = 230; // need at least this much pace to take off
 const JUMP_MAX = 380; // longest leap
 const BARN = { x0: 140, x1: 520, y0: 60, y1: 160 };
 
-const loadImage = (svg: string, w: number): Promise<HTMLImageElement> => new Promise((res, rej) => {
-  const img = new Image();
-  img.onload = () => res(img);
-  img.onerror = rej;
-  let s = svg.includes('xmlns=') ? svg : svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
-  s = s.replace('<svg ', `<svg width="${w}" `);
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(s)}`;
-});
-
 // Deterministic scatter for grass tufts and flowers.
 function rng(seed: number) { let s = seed; return () => { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
 
@@ -78,7 +68,7 @@ export class Ranch {
   private stand: CanvasImageSource | null = null;
   private graze: CanvasImageSource | null = null;
   private front: CanvasImageSource[] = [];
-  private back: HTMLImageElement[] = [];
+  private back: CanvasImageSource[] = [];
   private spriteKey = '';
   private raf = 0;
   private last = 0;
@@ -155,7 +145,7 @@ export class Ranch {
     if (key === this.spriteKey) return;
     this.spriteKey = key;
     const sw = 340;
-    // The felt puppet (side and front); walking away still uses the drawn back view.
+    // The felt puppet: side, front and back.
     const base = 266 / 290;
     const fw = Math.round(sw * 200 / 320);
     const [side, run, [stand], [graze], [lieImg], front, back] = await Promise.all([
@@ -165,7 +155,7 @@ export class Ranch {
       puppetFrames(def, null, 1, sw, { mode: 'graze', base }),
       puppetFrames(def, null, 1, sw, { mode: 'lie', base }),
       puppetFrontFrames(def, null, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270 }),
-      Promise.all(Array.from({ length: FB_FRAMES }, (_, f) => loadImage(horseBackSVG(def, look, f / FB_FRAMES), fw))),
+      puppetBackFrames(def, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270 }),
     ]);
     Object.assign(this, { side, run, stand, graze, front, back, lieImg });
   }
