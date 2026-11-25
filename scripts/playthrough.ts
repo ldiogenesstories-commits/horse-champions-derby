@@ -130,7 +130,7 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
       if (event) events++;
       if (event && p.place === 1) {
         career.eventWins.push('Event');
-        if (!horseshoe) { horseshoe = true; for (const k of STAT_KEYS) { const pot = Object.fromEntries(STAT_KEYS.map((x) => [x, potentialOf(h, x)])) as HorseDef['stats']; pot[k] = Math.min(100, pot[k] + 2); h.potential = pot; } }
+        if (!horseshoe) { horseshoe = true; for (const k of STAT_KEYS) { const pot = Object.fromEntries(STAT_KEYS.map((x) => [x, potentialOf(h, x)])) as unknown as HorseDef["stats"]; pot[k] = Math.min(100, pot[k] + 2); h.potential = pot; } }
       }
       if (p.place === 1) { rec.w++; if (races <= 12) winsFirstHalf++; else winsSecondHalf++; }
       else if (p.place === 2) rec.p++;
