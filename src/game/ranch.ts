@@ -5,6 +5,8 @@
 import type { HorseDef } from '../sim/types';
 import type { Look } from './horseBody';
 import { puppetBackFrames, puppetFrames, puppetFrontFrames } from './puppet';
+import { RanchLife } from './ranchLife';
+import type { FriendId } from './critters';
 
 const INK = '#2B2118';
 const PAPER = '#FFFBF2';
@@ -58,6 +60,29 @@ export interface RanchHooks {
   /** The horse is standing at a station (or left it: null). */
   onNear(st: Station | null): void;
   onGait?(g: Gait): void;
+  /** A short caption (critters playing with your horse). */
+  onToast?(text: string): void;
+  /** A hoof hit the ground (for footstep sounds). */
+  onHoof?(gait: Gait): void;
+}
+
+// Sky through the day: sunrise, late morning, afternoon, golden evening (top, horizon).
+const SKY: [number, string, string][] = [
+  [0, '#F4B8A0', '#FCE6C8'],
+  [0.34, '#8FBFD3', '#E3EFF2'],
+  [0.67, '#7FB3CF', '#EDEFD8'],
+  [1, '#D97F5E', '#F8C987'],
+];
+function mix(a: string, b: string, t: number): string {
+  const p = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',')})`;
+}
+function skyAt(t: number): [string, string] {
+  for (let i = 1; i < SKY.length; i++) {
+    if (t <= SKY[i][0]) { const [a0, top0, hz0] = SKY[i - 1]; const [a1, top1, hz1] = SKY[i]; const k = (t - a0) / (a1 - a0); return [mix(top0, top1, k), mix(hz0, hz1, k)]; }
+  }
+  return [SKY[SKY.length - 1][1], SKY[SKY.length - 1][2]];
 }
 
 export class Ranch {
@@ -103,9 +128,16 @@ export class Ranch {
   private flowers: { x: number; y: number; c: string }[] = [];
   private clouds: { x: number; y: number; s: number }[] = [];
   private hooks: RanchHooks;
+  private life: RanchLife;
+  private horseName = 'your horse';
+  /** Current time of day (0 sunrise … 1 evening), eased. */
+  get timeOfDay(): number { return this.tod; }
+  private tod = 0; // time of day shown (eases toward todTarget)
+  private todTarget = 0;
 
   constructor(private host: HTMLElement, hooks: RanchHooks) {
     this.hooks = hooks;
+    this.life = new RanchLife((t) => this.hooks.onToast?.(t), () => this.horseName);
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'rn-canvas';
     host.prepend(this.canvas);
@@ -118,6 +150,7 @@ export class Ranch {
     // Pointer: tap-to-go on the canvas.
     this.canvas.addEventListener('pointerdown', (e) => {
       if (!this.tapMode) return;
+      if (this.tapAt(e.clientX, e.clientY)) return; // tapped a critter: go play
       const rect = this.canvas.getBoundingClientRect();
       const sx = (e.clientX - rect.left) / this.k + this.camX;
       const sy = (e.clientY - rect.top) / this.k + this.camY;
@@ -136,12 +169,28 @@ export class Ranch {
     if (e.type === 'keydown') this.keys.add(k); else this.keys.delete(k);
   };
 
+  /** Tap on the field (client coords): if it's on a critter, the horse heads over to play. */
+  tapAt(clientX: number, clientY: number): boolean {
+    if (this.scene) return false;
+    const rect = this.canvas.getBoundingClientRect();
+    const wx = (clientX - rect.left) / this.k + this.camX;
+    const wsy = (clientY - rect.top) / this.k + this.camY;
+    return this.life.tap(wx, wsy, (y) => this.sy(y));
+  }
+
+  /** Which barn friends are out on the ranch. */
+  setFriends(ids: FriendId[]): void { this.life.setFriends(ids); }
+
+  /** 0 = sunrise … 1 = golden evening. Eases there over a few seconds. */
+  setTimeOfDay(v: number, instant = false): void { this.todTarget = Math.max(0, Math.min(1, v)); if (instant) this.tod = this.todTarget; }
+
   /** Analogue input from the thumb stick: x, y in -1..1 (y down = toward the camera). */
   setStick(x: number, y: number): void { this.stick = { x, y }; if (x || y) this.target = null; }
 
   /** Render the horse's walking poses in its current grooming look. */
   async setHorse(def: HorseDef, look: Look): Promise<void> {
     const key = JSON.stringify([def.coat, def.marking, def.color, look]);
+    this.horseName = def.name;
     if (key === this.spriteKey) return;
     this.spriteKey = key;
     const sw = 340;
@@ -231,13 +280,14 @@ export class Ranch {
     }
     let x = this.stick.x;
     let y = this.stick.y;
+    if (Math.hypot(x, y) > 0.12) this.life.cancel();
     const k = this.keys;
     const kx = (k.has('arrowright') || k.has('d') ? 1 : 0) - (k.has('arrowleft') || k.has('a') ? 1 : 0);
     const ky = (k.has('arrowdown') || k.has('s') ? 1 : 0) - (k.has('arrowup') || k.has('w') ? 1 : 0);
     if (kx || ky) {
       const m = Math.hypot(kx, ky);
       const pow = k.has('shift') ? 1 : 0.62; // keys trot; hold Shift to canter
-      x = (kx / m) * pow; y = (ky / m) * pow; this.target = null;
+      x = (kx / m) * pow; y = (ky / m) * pow; this.target = null; this.life.cancel();
     }
     if (this.target && !x && !y) {
       const dx = this.target.x - this.x;
@@ -345,7 +395,9 @@ export class Ranch {
     const actual = moved / Math.max(dt, 1e-4);
     const gait: Gait = actual < 12 ? 'stand' : actual < 130 ? 'walk' : actual < 240 ? 'trot' : 'canter';
     if (gait !== this.gait) { this.gait = gait; this.hooks.onGait?.(gait); }
+    const prevBeat = Math.floor(this.phase * 2);
     this.phase = (this.phase + moved / STRIDE[gait === 'stand' ? 'walk' : gait]) % 1;
+    if (gait !== 'stand' && Math.floor(this.phase * 2) !== prevBeat) this.hooks.onHoof?.(gait);
     // Which way the paper horse faces (screen space: depth is squashed).
     if (actual > 12) {
       const sx = vx || Math.cos(this.heading); const sy = (vy || Math.sin(this.heading)) * TILT;
@@ -369,6 +421,11 @@ export class Ranch {
     const dt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     this.step(dt);
+    this.tod += (this.todTarget - this.tod) * Math.min(1, dt * 0.6);
+    this.life.tod = this.tod;
+    const grazing = !this.jump && !this.scene && this.still > 3.5 && this.gait === 'stand' && this.facing !== 'back';
+    const lv = this.life.update(dt, { x: this.x, y: this.y, speed: this.jump ? 0 : this.speed, heading: this.heading, facing: this.facing, moving: this.speed > 20 && !this.scene, grazing, flip: this.facing === 'left' || (grazing && this.facing === 'front' && this.heading > Math.PI / 2) });
+    if (lv.goTo && !this.scene) this.target = { x: lv.goTo.x, y: lv.goTo.y + 30 };
     const c = this.canvas;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cw = c.clientWidth;
@@ -386,6 +443,7 @@ export class Ranch {
     this.camInit = true;
     this.camX += (tx - this.camX) * ease;
     this.camY += (ty - this.camY) * ease;
+    this.life.setView(this.camX, this.camX + viewW);
     const g = this.g;
     g.setTransform(dpr * this.k, 0, 0, dpr * this.k, -this.camX * dpr * this.k, -this.camY * dpr * this.k);
     this.drawWorld(g, now / 1000, dt, viewW, viewH);
@@ -398,6 +456,14 @@ export class Ranch {
       else { g.fillStyle = b.c!; g.fillRect(b.x - 3, b.y - 3, 6, 6); }
     }
     g.globalAlpha = 1;
+    // Time-of-day light: a rosy sunrise, a golden evening.
+    {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const morn = Math.max(0, (0.2 - this.tod) / 0.2);
+      const eve = Math.max(0, (this.tod - 0.6) / 0.4);
+      if (morn > 0) { g.fillStyle = `rgba(255,186,150,${morn * 0.1})`; g.fillRect(0, 0, cw, ch); }
+      if (eve > 0) { g.fillStyle = `rgba(255,140,60,${eve * 0.15})`; g.fillRect(0, 0, cw, ch); g.fillStyle = `rgba(48,36,80,${Math.max(0, eve - 0.5) * 0.22})`; g.fillRect(0, 0, cw, ch); }
+    }
     // Dusk dim for a nap, paper wipe for leaving.
     if (this.dim > 0 || this.fade > 0) {
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -413,8 +479,19 @@ export class Ranch {
     const x0 = this.camX - 40; const x1 = this.camX + viewW + 40;
     // Sky.
     const sky = g.createLinearGradient(0, this.camY - 50, 0, TOP + 40);
-    sky.addColorStop(0, '#8FBFD3'); sky.addColorStop(1, '#E3EFF2');
+    const [skyTop, skyHz] = skyAt(this.tod);
+    sky.addColorStop(0, skyTop); sky.addColorStop(1, skyHz);
     g.fillStyle = sky; g.fillRect(x0, this.camY - 60, x1 - x0, TOP + 100 - this.camY);
+    // Paper sun: rises on the left, arcs over, sets warm on the right.
+    {
+      const sx = this.camX + viewW * (0.12 + 0.76 * this.tod);
+      const syy = TOP - 95 - Math.sin(Math.PI * Math.min(1, this.tod * 0.9 + 0.08)) * 70;
+      const warm = this.tod < 0.15 || this.tod > 0.7;
+      g.fillStyle = warm ? 'rgba(255,200,120,.35)' : 'rgba(255,240,180,.35)';
+      g.beginPath(); g.arc(sx, syy, 40, 0, Math.PI * 2); g.fill();
+      g.fillStyle = warm ? '#FFB45A' : '#FFE27A'; g.strokeStyle = 'rgba(43,33,24,.35)'; g.lineWidth = 2;
+      g.beginPath(); g.arc(sx, syy, 24, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
     // Paper clouds drifting.
     for (const cl of this.clouds) {
       const cx = ((cl.x + t * 8 * cl.s) % (W + 300)) - 150;
@@ -472,6 +549,7 @@ export class Ranch {
       { y: 760, draw: () => this.paperTree(g, 2210, this.sy(760), 0.9, '#4F8A5B') },
       { y: 300, draw: () => this.paperTree(g, 1960, this.sy(300), 0.8, '#5E9B5A') },
       { y: this.y, draw: () => this.drawHorse(g) },
+      ...this.life.items(g, (y) => this.sy(y), this.y),
     ];
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
@@ -479,6 +557,7 @@ export class Ranch {
     for (const d of this.dust) { d.life -= dt; d.r += 18 * dt; }
     this.dust = this.dust.filter((d) => d.life > 0);
     for (const d of this.dust) { g.fillStyle = `rgba(169,143,110,${d.life})`; g.beginPath(); g.arc(d.x, this.sy(d.y) - 4, d.r, 0, Math.PI * 2); g.fill(); }
+    this.life.drawFireflies(g, (y) => this.sy(y), t);
     // Front fence last (in front of everything).
     this.fenceRun(g, FENCE.x0, FENCE.x1, FENCE.y1, x0, x1, null);
     // Station marker: a bobbing paper arrow over the station you're next to.
@@ -586,6 +665,7 @@ export class Ranch {
     g.fillStyle = PAPER; g.strokeStyle = INK; g.lineWidth = 2; g.fillRect(mid - 60, top + 6, 120, 26); g.strokeRect(mid - 60, top + 6, 120, 26);
     g.fillStyle = INK; g.font = '900 15px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('THE BARN', mid, top + 20);
     // Lantern.
+    if (this.tod > 0.7) { g.fillStyle = `rgba(255,214,90,${(this.tod - 0.7) * 1.2})`; g.beginPath(); g.arc(x1 - 40, top + 40, 26, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = '#FFD23F'; g.beginPath(); g.arc(x1 - 40, top + 40, 9, 0, Math.PI * 2); g.fill(); g.stroke();
   }
 

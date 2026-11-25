@@ -11,7 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { RaceAmbience, bugle, gateBell, isMuted, setMuted, unlockAudio } from './game/sfx';
+import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio } from './game/sfx';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -130,6 +130,8 @@ let pendingScreen: Screen | null = null;
 let finishSplashed = false;
 /** Crowd + hoofbeats for races on phones (the TV broadcast runs its own). */
 const raceAmb = new RaceAmbience();
+/** Background life for the ranch and the barn. */
+const sceneAmb = new SceneAmbience();
 function show(id: Screen): void {
   if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
   // A transition is already covering the screen: just retarget where it lands.
@@ -148,6 +150,8 @@ function showNow(id: Screen): void {
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
   document.body.dataset.screen = id; // lets the mute button find a free corner per screen
   if (id !== 'race') raceAmb.stop();
+  sceneAmb.friends = friends.filter((f) => f !== 'spider');
+  sceneAmb.set(id === 'ranch' ? 'ranch' : id === 'stable' ? 'barn' : null);
   if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
 }
@@ -1645,6 +1649,10 @@ function ranchToast(text: string, warn = false): void {
 }
 
 function renderRanchHud(): void {
+  // The sky follows the day: sunrise with all actions left, golden evening with none.
+  ranch?.setTimeOfDay((ACTIONS_PER_DAY - actionsLeft) / ACTIONS_PER_DAY);
+  sceneAmb.tod = (ACTIONS_PER_DAY - actionsLeft) / ACTIONS_PER_DAY;
+  ranch?.setFriends(friends);
   $('rn-name').textContent = player.name;
   const ev = eventToday();
   $('rn-day').textContent = `Day ${day}${ev ? ` · ${ev.name} today!` : ''}`;
@@ -1662,6 +1670,8 @@ function enterRanch(): void {
         if (st) { b.querySelector('b')!.textContent = st.label; b.querySelector('span')!.textContent = st.hint; }
       },
       onGait: (g) => { $('rn-gait').textContent = GAIT_LABEL[g]; },
+      onToast: (t) => ranchToast(t),
+      onHoof: (g) => hoofClop(g),
     });
     setSteering(localStorage.getItem('hcd-ranch-tap') === '1');
     (window as unknown as { __ranch: Ranch }).__ranch = ranch; // handy for testing in the console
@@ -1669,6 +1679,7 @@ function enterRanch(): void {
   portalActions = -1;
   if (returnAtGate) { returnAtGate = false; ranch.place(2230, 480, 'left'); }
   renderRanchHud();
+  ranch.setTimeOfDay((ACTIONS_PER_DAY - actionsLeft) / ACTIONS_PER_DAY, true);
   void ranch.setHorse(player, look);
   ranch.start();
   const msg = $('st-msg').textContent ?? '';
@@ -1746,11 +1757,14 @@ renderMute();
   let id: number | null = null;
   let cx = 0;
   let cy = 0;
+  let downAt = 0;
+  let travel = 0;
   const move = (e: PointerEvent) => {
     const max = stick.offsetWidth / 2 - 8;
     let dx = e.clientX - cx;
     let dy = e.clientY - cy;
     const d = Math.hypot(dx, dy);
+    travel = Math.max(travel, d);
     if (d > max) { dx = (dx / d) * max; dy = (dy / d) * max; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
     const m = Math.min(d, max) / max;
@@ -1767,6 +1781,8 @@ renderMute();
     if (onControl(e.target)) return;
     e.preventDefault();
     id = e.pointerId;
+    downAt = performance.now();
+    travel = 0;
     stage.setPointerCapture(e.pointerId);
     const sr = stage.getBoundingClientRect();
     const half = stick.offsetWidth / 2;
@@ -1785,6 +1801,8 @@ renderMute();
   const end = (e: PointerEvent) => {
     if (e.pointerId !== id) return;
     id = null;
+    // A quick tap (no drag) on a critter: go play with it.
+    if (e.type === 'pointerup' && travel < 10 && performance.now() - downAt < 350) ranch?.tapAt(e.clientX, e.clientY);
     knob.style.transform = '';
     stick.classList.remove('live');
     stick.style.left = stick.style.top = stick.style.bottom = '';

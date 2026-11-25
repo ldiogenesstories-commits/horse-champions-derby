@@ -306,3 +306,147 @@ export class RaceAmbience {
     this.crowdG = this.crowdHiG = null;
   }
 }
+
+/** Little voices for ranch critters (tap, play, scatter). */
+export function critterSound(kind: string): void {
+  if (!ready()) return;
+  const t = now();
+  switch (kind) {
+    case 'butterfly': [2093, 2637, 3136].forEach((f, i) => tone(t + i * 0.05, f, 0.25, 'sine', 0.05)); break;
+    case 'bird': for (let i = 0; i < 3; i++) tone(t + i * 0.08, 2800 + Math.random() * 500, 0.06, 'sine', 0.07, { slideTo: 3800 }); noise(t, 0.25, 'bandpass', 1200, 2400, 1.5, 0.05, 0.01); break;
+    case 'rabbit': tone(t, 120, 0.08, 'sine', 0.3, { slideTo: 60 }); tone(t + 0.12, 120, 0.08, 'sine', 0.25, { slideTo: 60 }); break;
+    case 'cat': tone(t, 700, 0.45, 'sawtooth', 0.05, { slideTo: 520, attack: 0.08, lowpass: 1800, vibrato: 6 }); break;
+    case 'hen': for (let i = 0; i < 3; i++) tone(t + i * 0.11, 600 + i * 40, 0.09, 'square', 0.03, { slideTo: 420, lowpass: 1500 }); tone(t + 0.36, 700, 0.25, 'square', 0.035, { slideTo: 900, lowpass: 1600 }); break;
+    case 'goat': tone(t, 380, 0.55, 'sawtooth', 0.06, { slideTo: 330, attack: 0.04, lowpass: 1400, vibrato: 25 }); break;
+    case 'ducks': for (let i = 0; i < 4; i++) tone(t + i * 0.1, 1700 + (i % 2) * 300, 0.07, 'triangle', 0.06, { slideTo: 2300 }); break;
+    case 'owl': tone(t, 400, 0.3, 'sine', 0.12, { slideTo: 360, attack: 0.06 }); tone(t + 0.4, 420, 0.5, 'sine', 0.12, { slideTo: 350, attack: 0.06, vibrato: 4 }); break;
+  }
+}
+
+// ---------- Scene ambience (ranch & barn) ----------
+
+/** A soft clop on the ranch grass, by gait. */
+export function hoofClop(gait: string): void {
+  if (!ready()) return;
+  const t = now();
+  const lvl = gait === 'canter' ? 1 : gait === 'trot' ? 0.75 : 0.5;
+  tone(t, 180 + Math.random() * 40, 0.06, 'sine', 0.08 * lvl, { slideTo: 90 });
+  noise(t, 0.05, 'bandpass', 900, 600, 1.2, 0.05 * lvl, 0.002);
+}
+
+function birdsong(t: number, peak = 0.045): void {
+  const base = 2200 + Math.random() * 1400;
+  const n = 3 + Math.floor(Math.random() * 5);
+  const style = Math.random();
+  for (let i = 0; i < n; i++) {
+    const at = t + i * (style < 0.5 ? 0.09 : 0.14);
+    const f = base * (style < 0.33 ? 1 + i * 0.06 : 1 + (i % 2) * 0.18);
+    tone(at, f, 0.07, 'sine', peak, { slideTo: f * (style < 0.66 ? 1.25 : 0.8) });
+  }
+}
+
+function cricket(t: number): void {
+  const f = 4200 + Math.random() * 600;
+  for (let i = 0; i < 3; i++) tone(t + i * 0.055, f, 0.035, 'sine', 0.025);
+}
+
+function snort(t: number): void {
+  noise(t, 0.35, 'lowpass', 900, 300, 0.8, 0.12, 0.02);
+  noise(t + 0.06, 0.25, 'bandpass', 1400, 600, 2, 0.05, 0.02); // the flutter of lips
+}
+
+function creak(t: number): void {
+  tone(t, 180 + Math.random() * 60, 0.5, 'sawtooth', 0.015, { slideTo: 140 + Math.random() * 60, attack: 0.08, lowpass: 900, vibrato: 18 });
+}
+
+function strawRustle(t: number): void {
+  noise(t, 0.4 + Math.random() * 0.4, 'highpass', 2500, 3500, 0.6, 0.035, 0.1);
+}
+
+/**
+ * Background life for a scene. 'ranch': a breeze, birdsong (mornings) or crickets
+ * (evenings). 'barn': quiet room tone, straw, creaks, snorts, and barn friends.
+ */
+export class SceneAmbience {
+  private mode: 'ranch' | 'barn' | null = null;
+  private bed: GainNode | null = null;
+  private bedSrc: AudioBufferSourceNode | null = null;
+  private bedFilter: BiquadFilterNode | null = null;
+  private timer = 0;
+  private next = 0;
+  private gust = 0;
+  /** 0 = sunrise … 1 = evening (ranch only). */
+  tod = 0;
+  /** Barn friends that might pipe up in the barn. */
+  friends: string[] = [];
+
+  set(mode: 'ranch' | 'barn' | null): void {
+    if (mode === this.mode) return;
+    this.stopBed();
+    this.mode = mode;
+    if (!mode) return;
+    this.next = 0;
+    this.timer = window.setInterval(() => this.tick(), 250);
+    this.startBed();
+  }
+
+  private startBed(): void {
+    if (!ctx || !master || !noiseBuf || !this.mode) return;
+    const c = ctx;
+    const s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = this.mode === 'ranch' ? 'bandpass' : 'lowpass';
+    f.frequency.value = this.mode === 'ranch' ? 500 : 260;
+    f.Q.value = 0.4;
+    const g = c.createGain(); g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(this.mode === 'ranch' ? 0.05 : 0.035, c.currentTime, 0.8);
+    s.connect(f).connect(g).connect(master);
+    s.start(c.currentTime, Math.random());
+    this.bed = g; this.bedSrc = s; this.bedFilter = f;
+  }
+
+  private stopBed(): void {
+    window.clearInterval(this.timer); this.timer = 0;
+    const g = this.bed; const s = this.bedSrc;
+    if (g && ctx) g.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.3);
+    if (s) window.setTimeout(() => { try { s.stop(); } catch { /* stopped */ } }, 1500);
+    this.bed = null; this.bedSrc = null; this.bedFilter = null;
+  }
+
+  private tick(): void {
+    if (!ctx || ctx.state !== 'running' || !this.mode) return;
+    if (!this.bed) this.startBed(); // audio got unlocked after we entered the scene
+    const t = ctx.currentTime;
+    // The breeze breathes: slow swells on the bed.
+    if (this.mode === 'ranch' && this.bed && this.bedFilter && t > this.gust) {
+      this.gust = t + 3 + Math.random() * 5;
+      const peak = 0.03 + Math.random() * 0.05;
+      this.bed.gain.setTargetAtTime(peak, t, 1.2);
+      this.bedFilter.frequency.setTargetAtTime(350 + Math.random() * 500, t, 1.5);
+    }
+    if (muted || t < this.next) return;
+    if (this.mode === 'ranch') {
+      const eve = this.tod > 0.7;
+      if (eve) {
+        // Crickets chirp in little runs; the odd far-off bird.
+        const at = t + 0.05;
+        for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) cricket(at + i * 0.32 + Math.random() * 0.05);
+        if (Math.random() < 0.15) birdsong(at + 1.5, 0.02);
+        this.next = t + 1.2 + Math.random() * 2;
+      } else {
+        birdsong(t + 0.05, this.tod < 0.35 ? 0.05 : 0.035);
+        if (Math.random() < 0.35) birdsong(t + 0.6 + Math.random() * 0.6, 0.025); // an answer
+        this.next = t + (this.tod < 0.35 ? 2 : 3.5) + Math.random() * 4;
+      }
+    } else {
+      const r = Math.random();
+      const at = t + 0.05;
+      if (r < 0.3) strawRustle(at);
+      else if (r < 0.5) creak(at);
+      else if (r < 0.7) snort(at);
+      else if (this.friends.length) critterSound(this.friends[Math.floor(Math.random() * this.friends.length)]);
+      else strawRustle(at);
+      this.next = t + 2.5 + Math.random() * 4.5;
+    }
+  }
+}
