@@ -306,3 +306,19 @@ export class RaceAmbience {
     this.crowdG = this.crowdHiG = null;
   }
 }
+
+/** Little voices for ranch critters (tap, play, scatter). */
+export function critterSound(kind: string): void {
+  if (!ready()) return;
+  const t = now();
+  switch (kind) {
+    case 'butterfly': [2093, 2637, 3136].forEach((f, i) => tone(t + i * 0.05, f, 0.25, 'sine', 0.05)); break;
+    case 'bird': for (let i = 0; i < 3; i++) tone(t + i * 0.08, 2800 + Math.random() * 500, 0.06, 'sine', 0.07, { slideTo: 3800 }); noise(t, 0.25, 'bandpass', 1200, 2400, 1.5, 0.05, 0.01); break;
+    case 'rabbit': tone(t, 120, 0.08, 'sine', 0.3, { slideTo: 60 }); tone(t + 0.12, 120, 0.08, 'sine', 0.25, { slideTo: 60 }); break;
+    case 'cat': tone(t, 700, 0.45, 'sawtooth', 0.05, { slideTo: 520, attack: 0.08, lowpass: 1800, vibrato: 6 }); break;
+    case 'hen': for (let i = 0; i < 3; i++) tone(t + i * 0.11, 600 + i * 40, 0.09, 'square', 0.03, { slideTo: 420, lowpass: 1500 }); tone(t + 0.36, 700, 0.25, 'square', 0.035, { slideTo: 900, lowpass: 1600 }); break;
+    case 'goat': tone(t, 380, 0.55, 'sawtooth', 0.06, { slideTo: 330, attack: 0.04, lowpass: 1400, vibrato: 25 }); break;
+    case 'ducks': for (let i = 0; i < 4; i++) tone(t + i * 0.1, 1700 + (i % 2) * 300, 0.07, 'triangle', 0.06, { slideTo: 2300 }); break;
+    case 'owl': tone(t, 400, 0.3, 'sine', 0.12, { slideTo: 360, attack: 0.06 }); tone(t + 0.4, 420, 0.5, 'sine', 0.12, { slideTo: 350, attack: 0.06, vibrato: 4 }); break;
+  }
+}
