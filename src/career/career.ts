@@ -89,10 +89,10 @@ const STAT_ROWS: [keyof HorseDef['stats'], string][] = [
 const artCache = new Map<string, Promise<string>>();
 /** The card's picture: the felt puppet mid-gallop, ridden in its jockey's silks. */
 function cardArt(c: RetiredCard): Promise<string> {
-  const key = JSON.stringify([c.code, c.horse.coat, c.jockey?.primary, c.jockey?.cap]);
+  const key = JSON.stringify([c.code, c.horse.coat, c.jockey?.primary, c.jockey?.cap, c.look]);
   let art = artCache.get(key);
   if (!art) {
-    art = puppetFrames(c.horse, c.jockey ?? null, 12, 560).then((f) => {
+    art = puppetFrames(c.horse, c.jockey ?? null, 12, 560, { look: c.look }).then((f) => {
       // A touch smaller than the frame so the outstretched hooves stay on the card.
       const out = document.createElement('canvas');
       out.width = f[2].width; out.height = f[2].height;

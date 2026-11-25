@@ -149,12 +149,12 @@ export class Ranch {
     const base = 266 / 290;
     const fw = Math.round(sw * 200 / 320);
     const [side, run, [stand], [graze], [lieImg], front, back] = await Promise.all([
-      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'walk', base }),
-      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'gallop', base }),
-      puppetFrames(def, null, 1, sw, { mode: 'stand', base }),
-      puppetFrames(def, null, 1, sw, { mode: 'graze', base }),
-      puppetFrames(def, null, 1, sw, { mode: 'lie', base }),
-      puppetFrontFrames(def, null, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270 }),
+      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'walk', base, look }),
+      puppetFrames(def, null, SIDE_FRAMES, sw, { mode: 'gallop', base, look }),
+      puppetFrames(def, null, 1, sw, { mode: 'stand', base, look }),
+      puppetFrames(def, null, 1, sw, { mode: 'graze', base, look }),
+      puppetFrames(def, null, 1, sw, { mode: 'lie', base, look }),
+      puppetFrontFrames(def, null, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270, look }),
       puppetBackFrames(def, FB_FRAMES, fw, Math.round(fw * 270 / 200), { mode: 'walk', base: 258 / 270 }),
     ]);
     Object.assign(this, { side, run, stand, graze, front, back, lieImg });

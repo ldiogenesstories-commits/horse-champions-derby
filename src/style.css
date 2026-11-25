@@ -366,6 +366,10 @@ button.small { height: 36px; font-size: 13px; padding: 0 12px; border-radius: 10
 .gr-stage { background: linear-gradient(#F3E6CC 70%, #D9C39C 70%); border: 4px solid var(--ink); border-radius: 16px; padding: 6px 4px 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .gr-stage.working { touch-action: none; box-shadow: 0 0 0 4px var(--flash); }
 .gr-stage svg { display: block; width: 100%; height: auto; }
+.gr-art { position: relative; }
+.gr-art img { display: block; width: 100%; height: auto; aspect-ratio: 320 / 290; }
+.gr-art svg { position: absolute; inset: 0; height: 100%; }
+.gr-art img:not([src]) { visibility: hidden; }
 .gr-msg { min-height: 22px; margin: 8px 2px; font-weight: 800; font-size: 14px; color: var(--turf); }
 .gr-care { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .gr-care-btn { min-height: 60px; border-radius: 14px; border: 3px solid var(--ink); background: var(--paper); text-align: left; padding: 8px 12px; display: grid; gap: 2px; cursor: pointer; box-shadow: 0 4px 0 rgba(43,33,24,0.2); }

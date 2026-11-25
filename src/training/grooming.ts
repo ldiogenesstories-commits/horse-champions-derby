@@ -2,7 +2,8 @@
 // Care (once a day each): rub the dust off the coat, pick out all four hooves.
 // Style (any time, free): mane, tail, forelock, bows and extras show on the horse.
 import type { HorseDef } from '../sim/types';
-import { horseBodySVG, type Look, type ManeStyle, type TailStyle, type ForelockStyle, type BowSpot } from '../game/horseBody';
+import type { Look, ManeStyle, TailStyle, ForelockStyle, BowSpot } from '../game/horseBody';
+import { puppetFrames, puppetHoofPoints } from '../game/puppet';
 
 export type CareKind = 'brush' | 'hooves';
 
@@ -15,10 +16,14 @@ interface Opts {
   onBack: () => void;
 }
 
+// Dust spots on the barrel, in the puppet image's pixels (it is baked at PW wide).
+const PW = 640;
+const PH = Math.round(PW * 290 / 320);
 const DUST = [
-  { x: 130, y: 128 }, { x: 175, y: 150 }, { x: 215, y: 126 }, { x: 150, y: 172 },
-  { x: 262, y: 108 }, { x: 108, y: 150 },
+  { x: 180, y: 250 }, { x: 270, y: 290 }, { x: 350, y: 245 }, { x: 220, y: 300 },
+  { x: 420, y: 215 }, { x: 140, y: 280 },
 ];
+const HOOVES = puppetHoofPoints(PW);
 const RUBS_PER_SPOT = 5;
 
 type Tab = 'mane' | 'tail' | 'forelock' | 'bows' | 'extras';
@@ -60,14 +65,29 @@ export function runGrooming(root: HTMLElement, o: Opts): () => void {
   const $ = (id: string) => root.querySelector(`#${id}`) as HTMLElement;
   const msg = (t: string) => { $('gr-msg').textContent = t; };
 
-  function draw(): void {
-    const svg = horseBodySVG(o.horse, look, {
-      shine: done.brush,
-      // Keep indices aligned with the rub counters; cleaned spots are drawn off-canvas.
-      dust: mode === 'brush' ? DUST.map((d, i) => (dust[i] > 0 ? d : { x: -999, y: -999 })) : [],
-      picked: mode === 'hooves' ? picked : undefined,
+  // The felt puppet in the current look (baked once per look), with dust and hoof targets drawn over it.
+  let artKey = '';
+  let artUrl = '';
+  function art(): void {
+    const key = JSON.stringify(look);
+    if (key === artKey) return;
+    artKey = key;
+    void puppetFrames(o.horse, null, 1, PW, { mode: 'stand', look }).then(([c]) => {
+      if (key !== artKey) return;
+      artUrl = c.toDataURL('image/png');
+      const img = root.querySelector<HTMLImageElement>('#gr-art');
+      if (img) img.src = artUrl;
     });
-    $('gr-stage').innerHTML = svg;
+  }
+
+  function draw(): void {
+    art();
+    const dustSVG = mode === 'brush'
+      ? DUST.map((d, i) => (dust[i] > 0 ? `<g class="dust" data-i="${i}"><circle cx="${d.x}" cy="${d.y}" r="26" fill="#A98F6E" opacity="0.75"/><circle cx="${d.x + 12}" cy="${d.y - 10}" r="12" fill="#A98F6E" opacity="0.7"/><circle cx="${d.x - 14}" cy="${d.y + 10}" r="10" fill="#8C7556" opacity="0.6"/></g>` : '')).join('')
+      : '';
+    const hoofSVG = HOOVES.map(([x, y], i) => `<circle class="hoof" data-i="${i}" cx="${x.toFixed(0)}" cy="${(y - 8).toFixed(0)}" r="20" fill="${mode === 'hooves' && picked[i] ? '#5FB36F' : 'transparent'}" opacity="0.8" ${mode === 'hooves' && !picked[i] ? 'stroke="#FFD23F" stroke-width="4" stroke-dasharray="6 5"' : ''}/>`).join('');
+    const gleam = done.brush ? `<path d="M${PW * 0.3} ${PH * 0.31} Q${PW * 0.43} ${PH * 0.26} ${PW * 0.6} ${PH * 0.29}" stroke="#FFFBF2" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.5"/>` : '';
+    $('gr-stage').innerHTML = `<div class="gr-art"><img id="gr-art" alt="${o.horse.name.replace(/[<>&"]/g, '')}" ${artUrl ? `src="${artUrl}"` : ''}><svg viewBox="0 0 ${PW} ${PH}" aria-hidden="true">${gleam}${dustSVG}${hoofSVG}</svg></div>`;
     $('gr-stage').classList.toggle('working', mode !== 'style');
     // Fade dust by how much it has been rubbed.
     root.querySelectorAll<SVGGElement>('.dust').forEach((g) => {
@@ -138,10 +158,10 @@ export function runGrooming(root: HTMLElement, o: Opts): () => void {
     const box = $('gr-stage').getBoundingClientRect();
     let best = -1;
     let bestD = Infinity;
-    root.querySelectorAll<SVGPolygonElement>('.hoof').forEach((h) => {
+    root.querySelectorAll<SVGCircleElement>('.hoof').forEach((h) => {
       const r = h.getBoundingClientRect();
       const d = Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y);
-      if (d < bestD) { bestD = d; best = Number(h.dataset.i); }
+      if (d < bestD && !picked[Number(h.dataset.i)]) { bestD = d; best = Number(h.dataset.i); }
     });
     if (best < 0 || bestD > box.width * 0.09 || picked[best]) return;
     picked[best] = true;

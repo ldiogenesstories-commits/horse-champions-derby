@@ -5,6 +5,7 @@
 import type { HorseDef } from '../sim/types';
 import type { Jockey } from './jockey';
 import { COATS } from './portrait';
+import { DEFAULT_LOOK, type Look } from './horseBody';
 
 const URLS = import.meta.glob('./puppet/*.webp', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const HALF = 0.5; // part images are stored at half the parts-sheet resolution
@@ -25,27 +26,55 @@ interface Part {
   sy?: number;
   flip?: boolean;
   /** How to recolour: coat, mane, silks, cap, or keep the art as is. */
-  tint?: 'coat' | 'mane' | 'silks' | 'cap';
+  tint?: 'coat' | 'mane' | 'silks' | 'cap' | 'accent';
   far?: boolean;
+  /** Only drawn when the grooming look calls for it. */
+  show?: (l: Look) => boolean;
+  /** Drawn in code instead of from an image (e.g. hoof polish), in the parent's coordinates. */
+  paint?: (g: CanvasRenderingContext2D) => void;
 }
 
 // Side-on rig. Parts are listed parents-first. The horse is cut facing left; it is flipped at the root.
 const SIDE: Part[] = [
   { id: 'hips' },
   { id: 'body', src: 'body', parent: 'hips', pivot: [534, 220], at: [0, 0], z: 10, tint: 'coat' },
-  { id: 'tail', src: 'tail', parent: 'body', pivot: [24, 70], at: [860, 118], z: 6, rot: 6, tint: 'mane' },
+  { id: 'tail', src: 'tail', parent: 'body', pivot: [24, 70], at: [860, 118], z: 6, rot: 6, tint: 'mane', show: (l) => l.tail === 'loose' },
+  { id: 'tailBraid', src: 'g_tail_braid', parent: 'body', pivot: [40, 95], at: [860, 112], z: 6, s: 0.62, rot: 18, tint: 'mane', show: (l) => l.tail === 'braid' },
+  { id: 'tailBun', src: 'g_tail_bun', parent: 'body', pivot: [70, 230], at: [872, 128], z: 6, s: 0.42, tint: 'mane', show: (l) => l.tail === 'bun' },
+  { id: 'bowTail', src: 'g_bow', parent: 'body', pivot: [181, 108], at: [872, 108], z: 9, s: 0.42, rot: -10, tint: 'accent', show: (l) => l.bow === 'tail' || l.bow === 'both' },
+  { id: 'pad', src: 'g_pad', parent: 'body', pivot: [405, 300], at: [400, 150], z: 15, s: 0.5, tint: 'accent', show: (l) => l.pad },
   { id: 'farHindU', src: 'hind_upper', parent: 'body', pivot: [59, 48], at: [728, 368], z: 3, tint: 'coat', far: true },
   { id: 'farHindL', src: 'hind_lower', parent: 'farHindU', pivot: [301, 330], at: [301, 330], z: 4, tint: 'coat', far: true },
   { id: 'farFrontU', src: 'front_upper', parent: 'body', pivot: [216, 51], at: [168, 342], z: 3, tint: 'coat', far: true },
   { id: 'farFrontL', src: 'front_lower', parent: 'farFrontU', pivot: [78, 341], at: [78, 341], z: 4, tint: 'coat', far: true },
   { id: 'neck', src: 'neck', parent: 'body', pivot: [244, 310], at: [163, 89], z: 8, rot: -6, tint: 'coat' },
-  { id: 'mane', src: 'mane', parent: 'neck', pivot: [22, 58], at: [110, 20], z: 12, s: 0.9, rot: 14, tint: 'mane' },
+  { id: 'mane', src: 'mane', parent: 'neck', pivot: [22, 58], at: [110, 20], z: 12, s: 0.9, rot: 14, tint: 'mane', show: (l) => l.mane === 'loose' },
+  { id: 'maneRun', src: 'g_mane_running', parent: 'neck', pivot: [40, 70], at: [78, 12], z: 12, s: 0.44, rot: 6, tint: 'mane', show: (l) => l.mane === 'running' },
+  { id: 'maneBtn', src: 'g_mane_buttons', parent: 'neck', pivot: [30, 70], at: [80, 8], z: 12, s: 0.52, rot: 14, tint: 'mane', show: (l) => l.mane === 'buttons' },
+  { id: 'maneLocs', src: 'g_mane_locs', parent: 'neck', pivot: [70, 50], at: [84, 10], z: 12, s: 0.5, rot: 4, tint: 'mane', show: (l) => l.mane === 'locs' },
+  { id: 'bowMane', src: 'g_bow', parent: 'neck', pivot: [181, 108], at: [300, 205], z: 13, s: 0.4, rot: 20, tint: 'accent', show: (l) => l.bow === 'mane' || l.bow === 'both' },
   { id: 'head', src: 'head', parent: 'neck', pivot: [350, 300], at: [69, 91], z: 11, s: 0.92, rot: 6, tint: 'coat' },
+  { id: 'forelock', src: 'g_forelock', parent: 'head', pivot: [60, 40], at: [300, 70], z: 11.5, s: 0.62, rot: -10, flip: true, tint: 'mane', show: (l) => l.forelock === 'braid' },
+  { id: 'crown', src: 'g_crown', parent: 'head', pivot: [330, 330], at: [310, 150], z: 11.6, s: 0.36, rot: -14, show: (l) => l.crown },
   { id: 'shoulder', src: 'shoulder', parent: 'body', pivot: [128, 249], at: [147, 348], z: 12, tint: 'coat' },
   { id: 'hindU', src: 'hind_upper', parent: 'body', pivot: [59, 48], at: [743, 377], z: 14, tint: 'coat' },
   { id: 'hindL', src: 'hind_lower', parent: 'hindU', pivot: [301, 330], at: [301, 330], z: 15, tint: 'coat' },
   { id: 'frontU', src: 'front_upper', parent: 'body', pivot: [216, 51], at: [147, 348], z: 14, tint: 'coat' },
   { id: 'frontL', src: 'front_lower', parent: 'frontU', pivot: [78, 341], at: [78, 341], z: 15, tint: 'coat' },
+  // Leg wraps and hoof polish ride on each lower leg.
+  ...(['frontL', 'farFrontL', 'hindL', 'farHindL'] as const).flatMap((leg) => {
+    const front = leg.toLowerCase().includes('front');
+    const far = leg.startsWith('far');
+    const z = far ? 4.5 : 15.5;
+    const hoof: Vec = front ? [69, 680] : [288, 668];
+    return [
+      { id: `${leg}Wrap`, src: 'g_wrap', parent: leg, pivot: [165, 215], at: front ? [82, 515] : [298, 505], z, s: 0.4, far, show: (l: Look) => l.wraps } as Part,
+      { id: `${leg}Gloss`, parent: leg, z: z + 0.1, show: (l: Look) => l.polish, paint: (g: CanvasRenderingContext2D) => {
+        g.fillStyle = 'rgba(255,251,242,0.85)'; g.beginPath(); g.ellipse(hoof[0] - 14, hoof[1] - 8, 26, 10, -0.3, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,214,90,0.5)'; g.beginPath(); g.ellipse(hoof[0] + 20, hoof[1] + 4, 12, 6, -0.3, 0, Math.PI * 2); g.fill();
+      } } as Part,
+    ];
+  }),
   { id: 'saddle', src: 'saddle', parent: 'body', pivot: [175, 70], at: [440, 34], z: 16, s: 0.78 },
   // Jockey (cut facing right, so flipped again to ride the same way as the horse).
   { id: 'jHips', parent: 'body', at: [470, -46], s: 0.62, flip: true },
@@ -91,7 +120,7 @@ const BACK: Part[] = [
   { id: 'legR', src: 'b_leg_r', parent: 'rump', pivot: [449, 777], at: [449, 777], z: 12, tint: 'coat' },
   { id: 'tail', src: 'b_tail', parent: 'rump', pivot: [60, 20], at: [250, 60], z: 14, tint: 'mane' },
 ];
-const drawOrder = (parts: Part[]) => parts.filter((p) => p.src).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+const drawOrder = (parts: Part[]) => parts.filter((p) => p.src || p.paint).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
 export type PuppetMode = 'gallop' | 'walk' | 'stand' | 'graze' | 'lie';
 type Pose = Record<string, number>;
@@ -120,9 +149,12 @@ function sidePose(ph: number, mode: PuppetMode = 'gallop'): Pose {
     farHindU: r.hindU - 36 * k * s(a + 1.7), farHindL: -52 * k * up(a + 3.3),
     neck: 5 * k * s(a + 1.2), head: -4 * k * s(a + 1.2), tail: (mode === 'stand' ? 3 : 9 * k) * s(a + 0.4), mane: 7 * k * s(a + 2.2),
     'jHips.y': 6 * k * s(2 * a + 1), jTorso: 3 * k * s(2 * a + 1), jUArm: 6 * k * s(a + 0.5), jFArm: -6 * k * s(a + 0.5), jHair: 8 * k * s(2 * a + 2),
+    ...(mode === 'stand' ? STAND_FAR : {}),
   };
 }
 const REST = { frontU: -16, frontL: 14, farFrontU: -16, farFrontL: 14, hindU: 18, farHindU: 18 };
+// Standing still, the far legs stand a little apart from the near ones so all four hooves show.
+const STAND_FAR = { farFrontU: 4, farFrontL: 4, farHindU: 32, farHindL: -6 };
 const GRAZE = { neck: -80, head: 18, mane: 16, x: -150, y: 70 };
 const LIE = { 'hips.y': 300, hips: 0, frontU: -78, frontL: 150, farFrontU: -70, farFrontL: 140, hindU: 82, hindL: -150, farHindU: 76, farHindL: -140, neck: 8, head: 4, tail: 20, mane: 0 };
 
@@ -194,7 +226,7 @@ const lum = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 *
  * relative to the art's base colour scales the target colour. Only saturated warm felt is
  * changed, so white socks, the blaze, eyes, hooves' shine and brass pins stay as drawn.
  */
-function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' | 'silks' | 'cap', dark = 1): HTMLCanvasElement {
+function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' | 'silks' | 'cap' | 'accent', dark = 1): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = img.naturalWidth; c.height = img.naturalHeight;
   const g = c.getContext('2d', { willReadFrequently: true })!;
@@ -203,7 +235,7 @@ function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' |
   const p = id.data;
   const [tr, tg, tb] = hexRgb(target);
   // Base brightness of the art's felt: chestnut coat, brown mane, orange silks.
-  const baseL = kind === 'coat' ? 118 : kind === 'mane' ? 72 : 140;
+  const baseL = kind === 'coat' ? 118 : kind === 'mane' ? 72 : kind === 'accent' ? 88 : 140;
   const keep = target === '';
   for (let i = 0; i < p.length; i += 4) {
     if (p[i + 3] === 0) continue;
@@ -212,7 +244,9 @@ function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' |
     const sat = mx === 0 ? 0 : (mx - mn) / mx;
     const warm = r >= gg && gg >= b * 0.85; // reds, oranges, browns
     const brass = gg / (r || 1) > 0.7 && b / (r || 1) < 0.62 && r > 130;
-    if (!keep && warm && !brass && sat > 0.28) {
+    // Accents (bows, pads) are dyed red felt: any strongly coloured pixel takes the new colour.
+    const dyed = kind === 'accent' ? sat > 0.45 && mx > 90 : warm && !brass && sat > 0.28;
+    if (!keep && dyed) {
       const k = Math.min(2.2, lum(r, gg, b) / baseL);
       r = tr * k; gg = tg * k; b = tb * k;
     }
@@ -225,52 +259,63 @@ function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' |
 type Src = HTMLImageElement | HTMLCanvasElement;
 
 /** The images for one horse + rider, recoloured. Chestnut coats keep the original felt. */
-async function partsFor(def: HorseDef, j: Jockey | null, order: Part[]): Promise<Map<string, Src>> {
+async function partsFor(def: HorseDef, j: Jockey | null, order: Part[], look: Look = DEFAULT_LOOK): Promise<Map<string, Src>> {
   const imgs = await loadBase();
   const coat = COATS[def.coat ?? 'bay'];
   const natural = (def.coat ?? 'bay') === 'chestnut';
   const out = new Map<string, Src>();
   for (const p of order) {
     const key = p.id;
-    const img = imgs.get(p.src!)!;
+    if (!p.src) continue;
+    const img = imgs.get(p.src)!;
     const dark = p.far ? 0.72 : 1;
     let src: Src = img;
     if (p.tint === 'coat') src = natural && !p.far ? img : recolour(img, natural ? '' : coat.body, 'coat', dark);
     else if (p.tint === 'mane') src = natural ? img : recolour(img, coat.mane, 'mane');
     else if (p.tint === 'silks') src = recolour(img, j?.primary ?? '#D96C2C', 'silks');
     else if (p.tint === 'cap') src = recolour(img, j?.cap ?? '#D96C2C', 'cap');
+    else if (p.tint === 'accent') src = recolour(img, (p.id === 'pad' ? '' : look.bowColor) || def.color, 'accent', dark);
+    else if (p.far) src = recolour(img, '', 'coat', dark);
     out.set(key, src);
   }
   return out;
 }
 
-function bake(rig: Rig, parts: Map<string, Src>, order: Part[], frames: number, W: number, H: number, mode: PuppetMode, base: number): HTMLCanvasElement[] {
+/** World matrix of every part for one pose. */
+function poseWorld(rig: Rig, ph: number, mode: PuppetMode, k: number, root: Vec): Map<string, M> {
+  const po = rig.pose(ph, mode);
+  const get = (key: string, d = 0) => po[key] ?? d;
+  const world = new Map<string, M>();
+  for (const p of rig.parts) {
+    let m: M;
+    if (!p.parent) {
+      m = mul(T(root[0], root[1] + get('hips.y') * k), mul(S(rig.flip ? -k : k, k), R(get('hips'))));
+    } else {
+      const at = p.at ?? [0, 0];
+      m = mul(world.get(p.parent)!, T(at[0] + get(`${p.id}.x`), at[1] + get(`${p.id}.y`)));
+      m = mul(m, R((p.rot ?? 0) + get(p.id)));
+      const s = p.s ?? 1;
+      m = mul(m, S(p.flip ? -s : s, s * (p.sy ?? 1) * get(`${p.id}.sy`, 1)));
+      if (p.pivot) m = mul(m, T(-p.pivot[0], -p.pivot[1]));
+    }
+    world.set(p.id, m);
+  }
+  return world;
+}
+
+function bake(rig: Rig, parts: Map<string, Src>, order: Part[], frames: number, W: number, H: number, mode: PuppetMode, base: number, look: Look = DEFAULT_LOOK): HTMLCanvasElement[] {
   const { k, root } = rig.fit(W, H, base);
   return Array.from({ length: frames }, (_, f) => {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d')!;
-    const po = rig.pose(f / frames, mode);
-    const get = (key: string, d = 0) => po[key] ?? d;
-    const world = new Map<string, M>();
-    for (const p of rig.parts) {
-      let m: M;
-      if (!p.parent) {
-        m = mul(T(root[0], root[1] + get('hips.y') * k), mul(S(rig.flip ? -k : k, k), R(get('hips'))));
-      } else {
-        const at = p.at ?? [0, 0];
-        m = mul(world.get(p.parent)!, T(at[0] + get(`${p.id}.x`), at[1] + get(`${p.id}.y`)));
-        m = mul(m, R((p.rot ?? 0) + get(p.id)));
-        const s = p.s ?? 1;
-        m = mul(m, S(p.flip ? -s : s, s * (p.sy ?? 1) * get(`${p.id}.sy`, 1)));
-        if (p.pivot) m = mul(m, T(-p.pivot[0], -p.pivot[1]));
-      }
-      world.set(p.id, m);
-    }
+    const world = poseWorld(rig, f / frames, mode, k, root);
     for (const p of order) {
-      const src = parts.get(p.id)!;
+      if (p.show && !p.show(look)) continue;
       const m = world.get(p.id)!;
       g.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
+      if (p.paint) { g.save(); p.paint(g); g.restore(); continue; }
+      const src = parts.get(p.id)!;
       const w = src instanceof HTMLImageElement ? src.naturalWidth : src.width;
       const h = src instanceof HTMLImageElement ? src.naturalHeight : src.height;
       g.drawImage(src, 0, 0, w / HALF, h / HALF);
@@ -287,6 +332,8 @@ export interface PuppetOpts {
   mode?: PuppetMode;
   /** Where the hooves sit, as a fraction of the height. */
   base?: number;
+  /** Grooming look (mane, tail, bows, extras); defaults to the horse's own. */
+  look?: Look;
 }
 
 /**
@@ -295,7 +342,8 @@ export interface PuppetOpts {
  */
 export async function puppetFrames(def: HorseDef, j: Jockey | null, frames: number, width: number, o: PuppetOpts = {}): Promise<HTMLCanvasElement[]> {
   const order = orderFor(SIDE, !!j);
-  return bake(RIGS.side, await partsFor(def, j, order), order, frames, width, Math.round(width * 290 / 320), o.mode ?? 'gallop', o.base ?? 0.93);
+  const look = { ...DEFAULT_LOOK, ...(o.look ?? def.look ?? {}) };
+  return bake(RIGS.side, await partsFor(def, j, order, look), order, frames, width, Math.round(width * 290 / 320), o.mode ?? 'gallop', o.base ?? 0.93, look);
 }
 
 /** Head-on poses, width × height, hooves on 96% of the height by default. */
@@ -308,4 +356,16 @@ export async function puppetFrontFrames(def: HorseDef, j: Jockey | null, frames:
 export async function puppetBackFrames(def: HorseDef, frames: number, width: number, height: number, o: PuppetOpts = {}): Promise<HTMLCanvasElement[]> {
   const order = orderFor(BACK, false);
   return bake(RIGS.back, await partsFor(def, null, order), order, frames, width, height, o.mode ?? 'walk', o.base ?? 0.96);
+}
+
+/**
+ * Where the four hooves sit on a standing side-on puppet baked at `width` (canvas px):
+ * near front, far front, near hind, far hind. For tap targets (picking hooves).
+ */
+export function puppetHoofPoints(width: number, base = 0.93): Vec[] {
+  const H = Math.round(width * 290 / 320);
+  const { k, root } = RIGS.side.fit(width, H, base);
+  const world = poseWorld(RIGS.side, 0, 'stand', k, root);
+  const at = (id: string, p: Vec): Vec => { const m = world.get(id)!; return [m[0] * p[0] + m[2] * p[1] + m[4], m[1] * p[0] + m[3] * p[1] + m[5]]; };
+  return [at('frontL', [69, 680]), at('farFrontL', [69, 680]), at('hindL', [288, 668]), at('farHindL', [288, 668])];
 }

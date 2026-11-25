@@ -972,7 +972,7 @@ function renderStable(): void {
   nameplate.innerHTML = `${player.name.toUpperCase().replace(/[<>&]/g, '')}${canRename() ? PENCIL : ''}`;
   nameplate.classList.toggle('editable', canRename());
   nameplate.setAttribute('aria-label', canRename() ? `Rename ${player.name}` : player.name);
-  void stableHorse(player, groomToday().brush);
+  void stableHorse(player, look, groomToday().brush);
   $('st-day').textContent = `Day ${day}`;
   const fs = fatigueState();
   $('st-mood').textContent = pendingBuff ? 'In Form!' : hungry() ? 'Hungry' : FATIGUE_MOOD[fs];
@@ -1365,11 +1365,11 @@ function startFamilyRace(room: Room, start: StartMsg, members: Member[]): void {
 
 // ---------- Stable portrait: the felt puppet, standing ----------
 let stableKey = '';
-async function stableHorse(def: HorseDef, shine: boolean): Promise<void> {
-  const key = JSON.stringify([def.coat, def.name, shine]);
+async function stableHorse(def: HorseDef, lk: Look, shine: boolean): Promise<void> {
+  const key = JSON.stringify([def.coat, def.name, def.color, lk, shine]);
   if (key === stableKey) return;
   stableKey = key;
-  const [pose] = await puppetFrames(def, null, 1, 580, { mode: 'stand' });
+  const [pose] = await puppetFrames(def, null, 1, 580, { mode: 'stand', look: lk });
   if (key !== stableKey) return; // a newer request won
   // Shrink a little, feet on the floor, so the ears clear the stall top.
   const c = document.createElement('canvas');
