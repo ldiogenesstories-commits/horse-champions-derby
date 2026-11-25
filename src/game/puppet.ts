@@ -21,14 +21,16 @@ interface Part {
   z?: number;
   rot?: number;
   s?: number;
+  /** Extra vertical squash (front view foreshortening). */
+  sy?: number;
   flip?: boolean;
   /** How to recolour: coat, mane, silks, cap, or keep the art as is. */
   tint?: 'coat' | 'mane' | 'silks' | 'cap';
   far?: boolean;
 }
 
-// The rig. Parts are listed parents-first. The horse is cut facing left; it is flipped at the root.
-const PARTS: Part[] = [
+// Side-on rig. Parts are listed parents-first. The horse is cut facing left; it is flipped at the root.
+const SIDE: Part[] = [
   { id: 'hips' },
   { id: 'body', src: 'body', parent: 'hips', pivot: [534, 220], at: [0, 0], z: 10, tint: 'coat' },
   { id: 'tail', src: 'tail', parent: 'body', pivot: [24, 70], at: [860, 118], z: 6, rot: 6, tint: 'mane' },
@@ -58,23 +60,66 @@ const PARTS: Part[] = [
   { id: 'jFArm', src: 'j_forearm', parent: 'jUArm', pivot: [60, 38], at: [66, 226], z: 26, rot: -40, tint: 'silks' },
   { id: 'jGlove', src: 'j_glove', parent: 'jFArm', pivot: [70, 30], at: [60, 210], z: 27, rot: -10 },
 ];
-const DRAW_ORDER = PARTS.filter((p) => p.src).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
+// Head-on rig: the horse charging at the camera, rider crouched behind the head.
+const FRONT: Part[] = [
+  { id: 'hips' },
+  { id: 'chest', src: 'f_chest', parent: 'hips', pivot: [205, 420], at: [0, 0], z: 10, tint: 'coat' },
+  { id: 'hindL', src: 'f_leg_l', parent: 'chest', pivot: [62, 49], at: [118, 722], z: 1, s: 0.82, tint: 'coat', far: true },
+  { id: 'hindR', src: 'f_leg_r', parent: 'chest', pivot: [105, 50], at: [292, 722], z: 1, s: 0.82, tint: 'coat', far: true },
+  { id: 'bootL', src: 'fj_boot_l', parent: 'chest', pivot: [180, 52], at: [22, 420], z: 2, s: 0.45 },
+  { id: 'bootR', src: 'fj_boot_r', parent: 'chest', pivot: [88, 51], at: [388, 420], z: 2, s: 0.45 },
+  { id: 'jHips', parent: 'chest', at: [205, 70], s: 0.5 },
+  { id: 'jTorso', src: 'fj_torso', parent: 'jHips', pivot: [383, 440], at: [0, 0], z: 3, tint: 'silks' },
+  { id: 'jForeL', src: 'fj_forearm_l', parent: 'jTorso', pivot: [58, 319], at: [80, 300], z: 4, rot: -40, tint: 'silks' },
+  { id: 'jForeR', src: 'fj_forearm_r', parent: 'jTorso', pivot: [213, 310], at: [690, 300], z: 4, rot: 40, tint: 'silks' },
+  { id: 'jGloveL', src: 'fj_glove_l', parent: 'jForeL', pivot: [75, 15], at: [60, 505], z: 11 },
+  { id: 'jGloveR', src: 'fj_glove_r', parent: 'jForeR', pivot: [71, 15], at: [215, 500], z: 11 },
+  { id: 'jHead', src: 'fj_head', parent: 'jTorso', pivot: [233, 470], at: [383, 40], z: 5, s: 0.9 },
+  { id: 'jCap', src: 'fj_cap', parent: 'jHead', pivot: [195, 270], at: [233, 150], z: 6, s: 0.95, tint: 'cap' },
+  { id: 'head', src: 'f_head', parent: 'chest', pivot: [132, 300], at: [205, 260], z: 12, tint: 'coat' },
+  { id: 'legL', src: 'f_leg_l', parent: 'chest', pivot: [62, 49], at: [78, 690], z: 14, tint: 'coat' },
+  { id: 'legR', src: 'f_leg_r', parent: 'chest', pivot: [105, 50], at: [335, 690], z: 14, tint: 'coat' },
+];
+const drawOrder = (parts: Part[]) => parts.filter((p) => p.src).sort((a, b) => (a.z ?? 0) - (b.z ?? 0));
 
-/** Joint angles (degrees) for a point in the gallop cycle, ph in [0, 1). */
-function pose(ph: number): Record<string, number> {
+/** Side-on joint angles (degrees; `.y` = lift in px) for a point in the gallop cycle, ph in [0, 1). */
+function sidePose(ph: number): Record<string, number> {
   const a = ph * Math.PI * 2;
   const s = Math.sin;
   const up = (x: number) => Math.max(0, s(x));
   return {
-    hipsY: -16 * Math.abs(s(a)), hipsRot: 4.5 * s(a + 0.6),
+    'hips.y': -16 * Math.abs(s(a)), hips: 4.5 * s(a + 0.6),
     frontU: 4 + 40 * s(a), frontL: 62 * up(a + 1.6),
     farFrontU: 4 + 40 * s(a - 0.7), farFrontL: 62 * up(a + 0.9),
     hindU: -4 - 36 * s(a + 2.4), hindL: -52 * up(a + 4.0),
     farHindU: -4 - 36 * s(a + 1.7), farHindL: -52 * up(a + 3.3),
     neck: 5 * s(a + 1.2), head: -4 * s(a + 1.2), tail: 9 * s(a + 0.4), mane: 7 * s(a + 2.2),
-    jHipsY: 6 * s(2 * a + 1), jTorso: 3 * s(2 * a + 1), jUArm: 6 * s(a + 0.5), jFArm: -6 * s(a + 0.5), jHair: 8 * s(2 * a + 2),
+    'jHips.y': 6 * s(2 * a + 1), jTorso: 3 * s(2 * a + 1), jUArm: 6 * s(a + 0.5), jFArm: -6 * s(a + 0.5), jHair: 8 * s(2 * a + 2),
   };
 }
+
+/** Head-on: legs lift and fold toward the camera (shorter as they come up), head and rider bob. */
+function frontPose(ph: number): Record<string, number> {
+  const a = ph * Math.PI * 2;
+  const s = Math.sin;
+  const up = (x: number) => Math.max(0, s(x));
+  const leg = (id: string, off: number, lift: number, out: number) => ({
+    [`${id}.y`]: -lift * up(a + off), [`${id}.sy`]: 1 - 0.24 * up(a + off), [id]: out * up(a + off),
+  });
+  return {
+    'hips.y': -18 * Math.abs(s(a)), hips: 1.5 * s(a + 0.6),
+    ...leg('legL', 0, 120, 7), ...leg('legR', 0.9, 120, -7),
+    ...leg('hindL', 2.3, 70, 4), ...leg('hindR', 3.2, 70, -4),
+    'head.y': 14 * s(a + 1.2), head: 2 * s(a),
+    'jHips.y': 8 * s(2 * a + 1), 'bootL.y': 6 * s(2 * a + 1), 'bootR.y': 6 * s(2 * a + 1),
+  };
+}
+
+interface Rig { parts: Part[]; pose: (ph: number) => Record<string, number>; flip: boolean; fit: (W: number, H: number) => { k: number; root: Vec } }
+const RIGS = {
+  side: { parts: SIDE, pose: sidePose, flip: true, fit: (W: number, H: number) => { const k = (0.98 * W) / 1850; return { k, root: [W / 2 - 75 * k, 0.93 * H - 893 * k] as Vec }; } },
+  front: { parts: FRONT, pose: frontPose, flip: false, fit: (_W: number, H: number) => { const k = (0.9 * H) / 1800; return { k, root: [_W / 2, 0.96 * H - 1023 * k] as Vec }; } },
+} satisfies Record<string, Rig>;
 
 // ---------- 2D affine [a, b, c, d, e, f] ----------
 type M = [number, number, number, number, number, number];
@@ -136,12 +181,12 @@ function recolour(img: HTMLImageElement, target: string, kind: 'coat' | 'mane' |
 type Src = HTMLImageElement | HTMLCanvasElement;
 
 /** The images for one horse + rider, recoloured. Chestnut coats keep the original felt. */
-async function partsFor(def: HorseDef, j: Jockey): Promise<Map<string, Src>> {
+async function partsFor(def: HorseDef, j: Jockey, order: Part[]): Promise<Map<string, Src>> {
   const imgs = await loadBase();
   const coat = COATS[def.coat ?? 'bay'];
   const natural = (def.coat ?? 'bay') === 'chestnut';
   const out = new Map<string, Src>();
-  for (const p of DRAW_ORDER) {
+  for (const p of order) {
     const key = p.id;
     const img = imgs.get(p.src!)!;
     const dark = p.far ? 0.72 : 1;
@@ -155,38 +200,32 @@ async function partsFor(def: HorseDef, j: Jockey): Promise<Map<string, Src>> {
   return out;
 }
 
-/**
- * Bake `frames` gallop poses for one horse and rider onto canvases sized width × (width·290/320),
- * matching the old sprite box: centred, hooves on 93% of the height, facing right.
- */
-export async function puppetFrames(def: HorseDef, j: Jockey, frames: number, width: number): Promise<HTMLCanvasElement[]> {
-  const parts = await partsFor(def, j);
-  const H = Math.round(width * 290 / 320);
-  const k = (0.98 * width) / 1850;
-  const root: Vec = [width / 2 - 75 * k, 0.93 * H - 893 * k];
+function bake(rig: Rig, parts: Map<string, Src>, order: Part[], frames: number, W: number, H: number): HTMLCanvasElement[] {
+  const { k, root } = rig.fit(W, H);
   return Array.from({ length: frames }, (_, f) => {
     const c = document.createElement('canvas');
-    c.width = width; c.height = H;
+    c.width = W; c.height = H;
     const g = c.getContext('2d')!;
-    const po = pose(f / frames);
-    const W = new Map<string, M>();
-    for (const p of PARTS) {
+    const po = rig.pose(f / frames);
+    const get = (key: string, d = 0) => po[key] ?? d;
+    const world = new Map<string, M>();
+    for (const p of rig.parts) {
       let m: M;
       if (!p.parent) {
-        m = mul(T(root[0], root[1] + po.hipsY * k), mul(S(-k, k), R(po.hipsRot)));
+        m = mul(T(root[0], root[1] + get('hips.y') * k), mul(S(rig.flip ? -k : k, k), R(get('hips'))));
       } else {
         const at = p.at ?? [0, 0];
-        m = mul(W.get(p.parent)!, T(at[0], at[1] + (p.id === 'jHips' ? po.jHipsY : 0)));
-        m = mul(m, R((p.rot ?? 0) + (po[p.id] ?? 0)));
+        m = mul(world.get(p.parent)!, T(at[0], at[1] + get(`${p.id}.y`)));
+        m = mul(m, R((p.rot ?? 0) + get(p.id)));
         const s = p.s ?? 1;
-        m = mul(m, S(p.flip ? -s : s, s));
+        m = mul(m, S(p.flip ? -s : s, s * (p.sy ?? 1) * get(`${p.id}.sy`, 1)));
         if (p.pivot) m = mul(m, T(-p.pivot[0], -p.pivot[1]));
       }
-      W.set(p.id, m);
+      world.set(p.id, m);
     }
-    for (const p of DRAW_ORDER) {
+    for (const p of order) {
       const src = parts.get(p.id)!;
-      const m = W.get(p.id)!;
+      const m = world.get(p.id)!;
       g.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
       const w = src instanceof HTMLImageElement ? src.naturalWidth : src.width;
       const h = src instanceof HTMLImageElement ? src.naturalHeight : src.height;
@@ -196,3 +235,17 @@ export async function puppetFrames(def: HorseDef, j: Jockey, frames: number, wid
   });
 }
 
+/**
+ * Bake `frames` side-on gallop poses for one horse and rider onto canvases sized width × (width·290/320),
+ * matching the old sprite box: centred, hooves on 93% of the height, facing right.
+ */
+export async function puppetFrames(def: HorseDef, j: Jockey, frames: number, width: number): Promise<HTMLCanvasElement[]> {
+  const order = drawOrder(SIDE);
+  return bake(RIGS.side, await partsFor(def, j, order), order, frames, width, Math.round(width * 290 / 320));
+}
+
+/** Head-on gallop poses, width × height, hooves on 96% of the height (the head-on shot's box). */
+export async function puppetFrontFrames(def: HorseDef, j: Jockey, frames: number, width: number, height: number): Promise<HTMLCanvasElement[]> {
+  const order = drawOrder(FRONT);
+  return bake(RIGS.front, await partsFor(def, j, order), order, frames, width, height);
+}

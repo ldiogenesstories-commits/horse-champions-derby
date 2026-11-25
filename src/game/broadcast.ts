@@ -6,11 +6,9 @@
 import type { Race } from '../sim/race';
 import type { HorseDef, HorseState } from '../sim/types';
 import { trackPoint } from '../sim/track';
-import { DEFAULT_LOOK } from './horseBody';
 import { DEFAULT_JOCKEY, type Jockey, type SilksPattern } from './jockey';
 import { portraitSVG } from './portrait';
-import { horseFrontSVG } from './horseFront';
-import { puppetFrames } from './puppet';
+import { puppetFrames, puppetFrontFrames } from './puppet';
 
 const FRAMES = 12; // gallop poses per horse
 const STRIDE_M = 7; // metres per full gallop cycle
@@ -22,17 +20,9 @@ type Shot = 'track' | 'aerial' | 'close' | 'rail' | 'headon' | 'winner';
 const SHOT_LABEL: Record<Shot, string> = { track: 'TRACKSIDE', aerial: 'AERIAL VIEW', close: 'CLOSE-UP', rail: 'RAIL CAM', headon: 'HEAD-ON', winner: 'WINNER CAM' };
 // The director's rotation between big moments (seconds of race time per shot).
 const PLAYLIST: [Shot, number][] = [['track', 6], ['close', 4.5], ['track', 4], ['rail', 4], ['headon', 5], ['track', 5], ['close', 4], ['aerial', 4.5]];
-const FRONT_FRAMES = 6;
+const FRONT_FRAMES = 8;
 
 interface Cut { until: number; html: string }
-
-const loadImage = (svg: string): Promise<HTMLImageElement> => new Promise((res, rej) => {
-  const img = new Image();
-  img.onload = () => res(img);
-  img.onerror = rej;
-  const s = svg.includes('xmlns=') ? svg : svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
-  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(s)}`;
-});
 
 /** A jockey for computer horses, dressed in the horse's racing colour. */
 export function cpuJockey(def: HorseDef): Jockey {
@@ -45,7 +35,7 @@ export class Broadcast {
   private ui: HTMLElement;
   private race: Race | null = null;
   private frames = new Map<string, CanvasImageSource[]>();
-  private fronts = new Map<string, HTMLImageElement[]>();
+  private fronts = new Map<string, CanvasImageSource[]>();
   private pl = 0;
   private focus = '';
   private focusTurn = 0;
@@ -86,8 +76,8 @@ export class Broadcast {
       if (jockeys.has(h.def.id) && j.name && j.name !== 'You') this.names.set(h.def.id, j.name);
       // Side-on: the jointed felt puppet (recoloured for this horse's coat and rider's silks).
       this.frames.set(h.def.id, await puppetFrames(h.def, j, FRAMES, SPRITE_W));
-      this.fronts.set(h.def.id, await Promise.all(Array.from({ length: FRONT_FRAMES }, (_, f) =>
-        loadImage(horseFrontSVG(h.def, h.def.look ?? DEFAULT_LOOK, j, f / FRONT_FRAMES).replace('<svg ', '<svg width="200" height="270" ')))));
+      // Head-on: the front-view felt puppet, same recolouring.
+      this.fronts.set(h.def.id, await puppetFrontFrames(h.def, j, FRONT_FRAMES, 280, 378));
     });
     await Promise.all(jobs);
     // Mini-map bounds from the oval itself.
