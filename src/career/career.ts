@@ -5,6 +5,7 @@ import type { HorseDef } from '../sim/types';
 import { horseBodySVG, type Look } from '../game/horseBody';
 import { riderSVG, silksBadge, type Jockey } from '../game/jockey';
 import { cardUrl } from '../net/cloud';
+import { puppetFrames } from '../game/puppet';
 
 export const CAREER_RACES = 25;
 
@@ -84,6 +85,39 @@ export function qrPayload(c: RetiredCard): string {
 const STAT_ROWS: [keyof HorseDef['stats'], string][] = [
   ['speed', 'SPD'], ['stamina', 'STA'], ['accel', 'ACC'], ['guts', 'GUT'], ['gate', 'GTE'], ['agility', 'AGI'],
 ];
+
+const artCache = new Map<string, Promise<string>>();
+/** The card's picture: the felt puppet mid-gallop, ridden in its jockey's silks. */
+function cardArt(c: RetiredCard): Promise<string> {
+  const key = JSON.stringify([c.code, c.horse.coat, c.jockey?.primary, c.jockey?.cap]);
+  let art = artCache.get(key);
+  if (!art) {
+    art = puppetFrames(c.horse, c.jockey ?? null, 12, 560).then((f) => {
+      // A touch smaller than the frame so the outstretched hooves stay on the card.
+      const out = document.createElement('canvas');
+      out.width = f[2].width; out.height = f[2].height;
+      out.getContext('2d')!.drawImage(f[2], out.width * 0.05, out.height * 0.08, out.width * 0.88, out.height * 0.88);
+      return out.toDataURL('image/png');
+    });
+    artCache.set(key, art);
+  }
+  return art;
+}
+
+/** Swap each card's drawn horse (in `root`, same order as `cards`) for the felt puppet once it's ready. */
+export async function paintCardArt(root: HTMLElement, cards: RetiredCard[]): Promise<void> {
+  const arts = [...root.querySelectorAll<HTMLElement>('.hcard-art')];
+  await Promise.all(cards.map(async (c, i) => {
+    const el = arts[i];
+    if (!el) return;
+    const url = await cardArt(c);
+    if (!el.isConnected) return;
+    const img = new Image();
+    img.src = url;
+    img.alt = c.horse.name;
+    el.replaceChildren(img);
+  }));
+}
 
 export function cardHTML(c: RetiredCard): string {
   const s = c.horse.stats;
