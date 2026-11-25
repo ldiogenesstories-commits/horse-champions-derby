@@ -9,7 +9,8 @@
     "build": "vite build",
     "sim:test": "tsx scripts/balance.ts",
     "narration:test": "tsx scripts/narration.ts",
-    "breeding:test": "tsx scripts/breeding.ts"
+    "breeding:test": "tsx scripts/breeding.ts",
+    "playthrough": "tsx scripts/playthrough.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",
