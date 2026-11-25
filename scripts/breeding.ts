@@ -87,5 +87,46 @@ const a2 = JSON.stringify(breedFoal(carrier, carrier, 'F', 42));
 check(a1 === a2, 'same seed gives the same foal');
 void makeRng;
 
+// ---- Phase 2: pedigree and bloodlines ----
+import { lineageBonus, lineOf } from '../src/sim/pedigree';
+const stallion = (n: string, coat: HorseDef['coat'] = 'bay'): HorseDef => ({ ...base(n, coat), sex: 'stallion' });
+const mare = (n: string): HorseDef => ({ ...base(n, 'bay'), sex: 'mare' });
+const sire1 = stallion('Gale Runner'); sire1.stats.stamina = 90;
+const dam1 = mare('Velvet Sparrow');
+const f1 = breedFoal(sire1, dam1, 'Gen2', 11, false, { a: 'Champion', b: 'Contender' });
+check(f1.pedigree?.sire?.name === 'Gale Runner' && f1.pedigree?.dam?.name === 'Velvet Sparrow', 'foal records its parents');
+check(f1.line?.name === 'Gale Runner' && f1.line.stat === 'stamina', 'Champion sire founds a bloodline on its best stat');
+check(f1.sire === 'Gale Runner' && f1.dam === 'Velvet Sparrow', 'sire/dam names still set for cards');
+
+const f1b = breedFoal(stallion('Plain Joe'), dam1, 'NoLine', 12, false, { a: 'Contender' });
+check(f1b.line === undefined, 'non-champion sire founds no bloodline');
+
+// Grow three generations and check depth is capped at great-grandparents
+let cur: HorseDef = { ...f1, sex: 'stallion' };
+const mates = [mare('M2'), mare('M3'), mare('M4'), mare('M5')];
+for (const m of mates) cur = { ...breedFoal(cur, m, 'Next', 21, false, { a: 'Contender' }), sex: 'stallion' };
+const depth = (p: import('../src/sim/pedigree').Ped | undefined): number => (p ? 1 + Math.max(depth(p.sire), depth(p.dam)) : 0);
+check(Math.max(depth(cur.pedigree?.sire), depth(cur.pedigree?.dam)) === 3, 'tree stops at great-grandparents (3 generations)');
+check(cur.line?.name === 'Gale Runner', 'bloodline passes down the sire line');
+check(JSON.stringify(cur).length < 6000, `horse record stays small (${JSON.stringify(cur).length} bytes)`);
+
+// Lineage bonus: Champion grandsire lifts stamina peak; capped at +5; none without champions
+const champSire = stallion('Old Champ'); champSire.stats.stamina = 95;
+const gen2 = { ...breedFoal(champSire, mare('Gran'), 'Mid', 31, false, { a: 'Champion' }), sex: 'stallion' as const };
+const lb = lineageBonus(gen2, mare('Other'), undefined);
+check((lb.bonus.stamina ?? 0) === 2 && lb.notes.length === 1, 'Champion grandsire gives +2 to its best stat');
+const legend = { ...breedFoal({ ...stallion('Legend X'), stats: { ...base('x', 'bay').stats, speed: 97 } }, mare('G2'), 'Mid2', 32, false, { a: 'Legend' }), sex: 'stallion' as const };
+check((lineageBonus(legend, mare('Other')).bonus.speed ?? 0) === 3, 'Legend grandsire gives +3');
+check(Object.keys(lineageBonus(base('a', 'bay'), base('b', 'bay')).bonus).length === 0, 'no champions, no bonus');
+
+// Bonus actually lifts foal peaks on average
+let withB = 0, without = 0;
+for (let i = 0; i < 400; i++) {
+  withB += breedFoal(gen2, mare('Other'), 'F', 5000 + i).potential!.stamina;
+  without += breedFoal({ ...gen2, pedigree: undefined, line: undefined }, mare('Other'), 'F', 5000 + i).potential!.stamina;
+}
+check(withB / 400 > without / 400 + 1, `lineage lifts average stamina peak (${(withB / 400).toFixed(1)} vs ${(without / 400).toFixed(1)})`);
+check(lineOf(stallion('S', 'bay'), 'Champion')?.name === 'S', 'lineOf founds a line from a Champion');
+
 console.log(failed ? `\n${failed} FAILED` : '\nAll breeding checks passed');
 process.exit(failed ? 1 : 0);

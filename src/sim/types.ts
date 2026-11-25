@@ -54,6 +54,10 @@ export interface HorseDef {
   potential?: { speed: number; stamina: number; accel: number; guts: number; gate: number; agility: number };
   /** Grooming look (player horses); portraits and race tokens show it. */
   look?: import('../game/horseBody').Look;
+  /** Family tree: parents, grandparents and great-grandparents. */
+  pedigree?: import('./pedigree').Pedigree;
+  /** Named bloodline founded by a Champion sire, passed down the sire line. */
+  line?: import('./pedigree').Line;
   /** Breeding: foals this horse has had on its home ranch. */
   foals?: number;
   distancePref?: 'sprint' | 'mile' | 'classic' | 'endurance';

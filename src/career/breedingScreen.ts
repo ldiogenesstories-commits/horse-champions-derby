@@ -4,7 +4,7 @@ import type { HorseDef } from '../sim/types';
 import { portraitSVG } from '../game/portrait';
 import type { RetiredCard } from './career';
 import { tierOf } from '../sim/growth';
-import { breedFoal, coatChances, homeFoalsLeft, HOME_FOAL_LIMIT, outlook, sexOf, SHARED_FOAL_LIMIT, suggestName, visitingPartners, type Partner } from './breeding';
+import { breedFoal, coatChances, homeFoalsLeft, HOME_FOAL_LIMIT, lineagePerks, outlook, sexOf, SHARED_FOAL_LIMIT, suggestName, visitingPartners, type Partner } from './breeding';
 import { carriedCoat } from '../sim/genetics';
 import { hd } from '../game/money';
 import { sparksOf } from '../sim/growth';
@@ -34,6 +34,7 @@ export function runBreeding(root: HTMLElement, o: {
   let parent: RetiredCard | undefined = o.hall.find((c) => c.code === o.preselect);
   let partner: HorseDef | undefined;
   let premier = false;
+  let partnerRank: string | undefined;
   let partnerCard: RetiredCard | undefined;
   let partners: Partner[] = [];
   let name = '';
@@ -72,11 +73,11 @@ export function runBreeding(root: HTMLElement, o: {
     $('br-back').addEventListener('click', () => (o.preselect ? o.onBack() : stepParent()));
     root.querySelectorAll<HTMLButtonElement>('[data-visit]').forEach((b) => b.addEventListener('click', () => {
       const v = partners[Number(b.dataset.visit)];
-      partner = v.horse; premier = !!v.premier; partnerCard = undefined; stepOutlook();
+      partner = v.horse; premier = !!v.premier; partnerCard = undefined; partnerRank = v.rank; stepOutlook();
     }));
     root.querySelectorAll<HTMLButtonElement>('[data-hall]:not([disabled])').forEach((b) => b.addEventListener('click', () => {
       partnerCard = o.hall.find((c) => c.code === b.dataset.hall)!;
-      partner = partnerCard.horse; premier = false; stepOutlook();
+      partner = partnerCard.horse; premier = false; partnerRank = partnerCard.rank; stepOutlook();
     }));
   }
 
@@ -87,7 +88,9 @@ export function runBreeding(root: HTMLElement, o: {
     const hidden = [a, b].map((h) => ({ h, c: carriedCoat(h) })).filter((x) => x.c);
     const hints = hidden.map((x) => `${x.h.name} carries a hidden ${COAT_LABEL[x.c!] ?? x.c} gene.`).join(' ');
     const stars = premier ? `<div class="br-star">★ Star trait guaranteed${sparksOf(b).length ? ` (${sparksOf(b).map((k) => STAT_LABEL.find(([x]) => x === k)![1]).join(', ')} runs in the family)` : ''}</div>` : '';
-    return `${stars}<div class="card-title">Coat chances</div><div class="coat-chips">${chips}</div><p class="muted br-note">${hints ? hints + ' ' : ''}A very rare surprise coat (dapple or roan) can appear out of nowhere, then be bred on.</p>`;
+    const perks = lineagePerks(a, b, { a: parent!.rank, b: partnerRank });
+    const perkHTML = perks.length ? `<div class="card-title">Family perks</div><ul class="br-perks">${perks.map((n) => `<li>${n} lifts a hidden peak</li>`).join('')}</ul>` : '';
+    return `${stars}${perkHTML}<div class="card-title">Coat chances</div><div class="coat-chips">${chips}</div><p class="muted br-note">${hints ? hints + ' ' : ''}A very rare surprise coat (dapple or roan) can appear out of nowhere, then be bred on.</p>`;
   }
 
   function stepOutlook(): void {
@@ -119,7 +122,7 @@ export function runBreeding(root: HTMLElement, o: {
       const n = name.trim() || suggestName(a, b, o.seed);
       const go = $('br-go') as HTMLButtonElement;
       go.disabled = true;
-      const err = await o.onDone(breedFoal(a, b, n, o.seed + 7, premier), { parent: parent!, partnerCard, premier });
+      const err = await o.onDone(breedFoal(a, b, n, o.seed + 7, premier, { a: parent!.rank, b: partnerRank }), { parent: parent!, partnerCard, premier });
       if (typeof err === 'string') {
         go.disabled = false;
         let msg = root.querySelector('.br-err') as HTMLElement | null;

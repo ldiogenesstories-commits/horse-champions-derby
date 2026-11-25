@@ -5,6 +5,7 @@ import { makeRng } from '../sim/rng';
 import { NEEDS } from '../sim/field';
 import type { HorseDef } from '../sim/types';
 import { BAND_HI, BAND_LO, POT_HI, POT_LO, potentialOf, rollIn, rollSparks, settlePotential, sparksOf } from '../sim/growth';
+import { lineageBonus, lineOf, pedigreeOf } from '../sim/pedigree';
 import { coatOdds, inheritGenes, RARE_COATS, visibleCoat, visibleMarking, withHiddenGenes } from '../sim/genetics';
 
 type StatKey = keyof HorseDef['stats'];
@@ -35,7 +36,7 @@ const BLURBS: Record<StatKey, string> = {
   speed: 'blazing speed', stamina: 'endless stamina', accel: 'a lightning kick', guts: 'pure grit', gate: 'rocket starts', agility: 'nimble feet',
 };
 
-export interface Partner { horse: HorseDef; note: string; record: string; premier?: boolean; cost?: number }
+export interface Partner { horse: HorseDef; note: string; record: string; premier?: boolean; cost?: number; rank: string }
 
 /** Four visiting partners of the opposite sex, each with a standout talent. */
 export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partner[] {
@@ -63,6 +64,7 @@ export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partne
       }, rng),
       note: `Known for ${BLURBS[star]}.`,
       record: `${w} career wins`,
+      rank: 'Contender',
     };
   });
   // The fourth visitor is the Premier Partner: costs Horse Dollars, carries 1-2 star
@@ -75,6 +77,7 @@ export function visitingPartners(seed: number, sex: 'mare' | 'stallion'): Partne
   ph.name = shuffle(PREMIER_NAMES[sex])[0];
   if (rng() < 0.3 && ph.genes) ph.genes = { ...ph.genes, coat: [ph.genes.coat[0], RARE_COATS[Math.floor(rng() * RARE_COATS.length)]] };
   prem.premier = true;
+  prem.rank = 'Champion';
   prem.cost = PREMIER_COST;
   prem.note = `Star trait guaranteed: ${pStars.map((k) => BLURBS[k]).join(' and ')}.`;
   prem.record = `${Math.round(14 + rng() * 8)} career wins`;
@@ -129,7 +132,7 @@ export function suggestName(a: HorseDef, b: HorseDef, seed: number): string {
 }
 
 /** `premier`: partner `b` is a Premier Partner, so the foal is guaranteed at least one star trait. */
-export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, premier = false): HorseDef {
+export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, premier = false, ranks: { a?: string; b?: string } = {}): HorseDef {
   const rng = makeRng(seed);
   const pick = <T,>(x: T, y: T): T => (rng() < 0.5 ? x : y);
   const stats = Object.fromEntries(STATS.map((k) => [k, rollIn(statRange(a.stats[k], b.stats[k]), rng)])) as unknown as HorseDef['stats'];
@@ -140,6 +143,14 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, 
   const best = [...STATS].sort((p, q) => Math.max(a.stats[q], b.stats[q]) - Math.max(a.stats[p], b.stats[p]))[0];
   const favour = premier ? sparksOf(b)[0] ?? best : best;
   const sparks = rollSparks(stats, potential, rng, favour, premier);
+  // Lineage: champion grandparents, great-grandparents and a bloodline lift hidden peaks.
+  const sireIsA = sexOf(a) === 'stallion';
+  const sireH = sireIsA ? a : b;
+  const damH = sireIsA ? b : a;
+  const sireRank = sireIsA ? ranks.a : ranks.b;
+  const damRank = sireIsA ? ranks.b : ranks.a;
+  const line = lineOf(sireH, sireRank);
+  for (const [k, n] of Object.entries(lineageBonus(a, b, line).bonus) as [StatKey, number][]) potential[k] = Math.min(100, potential[k] + n);
   settlePotential(stats, potential);
   // Coat and markings come from genes: one from each parent, so hidden genes can reappear.
   const genes = inheritGenes(a, b, rng);
@@ -147,8 +158,6 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, 
   const marking = visibleMarking(genes.marking);
   const need = rng() < 0.2 ? NEEDS[Math.floor(rng() * NEEDS.length)] : pick(a.need ?? 'social', b.need ?? 'social');
   const dIdx = Math.max(0, Math.min(3, Math.round(1.5 + (stats.stamina - stats.speed) / 10 + (rng() - 0.5))));
-  const sire = sexOf(a) === 'stallion' ? a : b;
-  const dam = sire === a ? b : a;
   return {
     id: 'player', number: 7, name, color: a.color,
     stats,
@@ -158,9 +167,18 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, 
     need, coat, marking, genes,
     distancePref: (['sprint', 'mile', 'classic', 'endurance'] as const)[dIdx],
     sex: rng() < 0.5 ? 'mare' : 'stallion',
-    sire: sire.name, dam: dam.name,
+    sire: sireH.name, dam: damH.name,
+    pedigree: pedigreeOf(sireH, sireRank, damH, damRank),
+    line,
     generation: Math.max(a.generation ?? 1, b.generation ?? 1) + 1,
     potential,
     sparks,
   };
+}
+
+/** Lineage perks the foal will get, for the outlook screen. */
+export function lineagePerks(a: HorseDef, b: HorseDef, ranks: { a?: string; b?: string }): string[] {
+  const sireIsA = sexOf(a) === 'stallion';
+  const line = lineOf(sireIsA ? a : b, sireIsA ? ranks.a : ranks.b);
+  return lineageBonus(a, b, line).notes;
 }
