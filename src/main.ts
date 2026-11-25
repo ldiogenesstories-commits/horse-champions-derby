@@ -11,6 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
+import { playTransition, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
 import { runSteadyGallop } from './training/steadyGallop';
@@ -113,10 +114,31 @@ type Screen = 'ranch' | 'family' | 'breed' | 'stable' | 'drill' | 'groom' | 'joc
 // "Home" is the ranch; the barn (the stable menu) is home only after you walk in.
 let home: 'ranch' | 'stable' = 'ranch';
 let forceBarn = false;
+const SCREENS: Screen[] = ['ranch', 'family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall'];
+/** Which scene changes get a transition, and which kind. */
+function transitionFor(from: Screen | undefined, to: Screen): TransitionKind | null {
+  if (!from || from === to) return null;
+  if ((from === 'ranch' || from === 'stable') && to === 'pre') return 'curtain'; // heading to the races
+  if (from === 'results' && (to === 'ranch' || to === 'stable' || to === 'retire' || to === 'family')) return 'curtain'; // back home
+  if (from === 'stable' && to === 'ranch') return 'nature'; // out of the barn into the field
+  return null;
+}
+let pendingScreen: Screen | null = null;
 function show(id: Screen): void {
   if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
+  // A transition is already covering the screen: just retarget where it lands.
+  if (pendingScreen) { pendingScreen = id; return; }
+  const kind = transitionFor(SCREENS.find((s) => $(s).classList.contains('active')), id);
+  if (kind) {
+    pendingScreen = id;
+    void playTransition(kind, () => { const t = pendingScreen ?? id; pendingScreen = null; showNow(t); });
+    return;
+  }
+  showNow(id);
+}
+function showNow(id: Screen): void {
   if (id === 'stable' || id === 'ranch') renderStable();
-  for (const s of ['ranch', 'family', 'breed', 'stable', 'drill', 'groom', 'jockey', 'pre', 'race', 'results', 'retire', 'hall']) $(s).classList.toggle('active', s === id);
+  for (const s of SCREENS) $(s).classList.toggle('active', s === id);
   if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
 }

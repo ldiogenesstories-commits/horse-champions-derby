@@ -706,3 +706,37 @@ button.st-nameplate.editable { cursor: pointer; }
 .rn-sheet[hidden] { display: none; }
 .rn-sheet .panel { margin: 0; box-shadow: 5px 5px 0 var(--ink); }
 @keyframes rn-up { from { transform: translate(-50%, 40px); opacity: 0; } }
+
+/* ---------- Scene transitions ---------- */
+.tx { position: fixed; inset: 0; z-index: 1000; pointer-events: all; overflow: hidden; }
+.tx-fade { background: #24402B; }
+.tx-panel {
+  position: absolute; top: 0; bottom: 0;
+  /* Racing-green velvet folds with a brass trim along the hem. */
+  background:
+    linear-gradient(to top, #2B2118 0 4px, #E2A93B 4px 16px, #2B2118 16px 19px, transparent 19px),
+    repeating-linear-gradient(90deg, #24402B 0, #3E6B48 18%, #4F8A5B 32%, #3E6B48 46%, #24402B 64%);
+  background-size: 100% 100%, 64px 100%;
+  box-shadow: inset 0 18px 24px -12px rgba(0,0,0,.45);
+  will-change: transform;
+}
+.tx-left { left: 0; width: 50.5%; border-right: 4px solid #2B2118; transform: translateX(-102%); }
+.tx-right { right: 0; width: 50.5%; border-left: 4px solid #2B2118; transform: translateX(102%); }
+.tx-full { left: 0; right: 0; transform: translateY(calc(-100% - 40px)); }
+.tx-swag .tx-full { transform-origin: top center; }
+/* Scalloped hem for the swag curtain. */
+.tx-swag .tx-full::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 28px;
+  background: radial-gradient(circle at 50% 0, #3E6B48 0 22px, #2B2118 22px 25px, transparent 25px) 0 0 / 50px 28px repeat-x;
+}
+.tx-logo {
+  position: absolute; left: 50%; top: 50%; margin: -95px 0 0 -120px; width: 240px; height: 190px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; opacity: 0;
+  font-family: var(--display); color: var(--paper); line-height: 1;
+}
+.tx-logo svg { width: 96px; height: 88px; filter: drop-shadow(3px 4px 0 #2B2118); margin-bottom: 8px; }
+.tx-logo b { font-size: 26px; letter-spacing: .5px; -webkit-text-stroke: 1px #2B2118; text-shadow: 2px 3px 0 #2B2118; }
+.tx-logo span { margin-top: 4px; font-size: 40px; font-weight: 900; text-transform: uppercase; letter-spacing: 4px; color: #FFD23F; -webkit-text-stroke: 1.5px #2B2118; text-shadow: 3px 4px 0 #2B2118; }
+.tx-ground { position: absolute; inset: 0; background: #7FB069; clip-path: inset(100% 0 0 0); }
+.tx-bit { position: absolute; transform: translate(-50%,-100%) scale(0); opacity: 0; line-height: 0; }
+.tx-bit svg { display: block; }
