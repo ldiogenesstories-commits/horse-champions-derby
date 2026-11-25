@@ -83,6 +83,12 @@ export class RaceScene extends Phaser.Scene {
     this.youLabel?.setText(text);
   }
 
+  /** Hold the race clock (e.g. while a curtain is up, or for a finish freeze-frame). */
+  private held = false;
+  private holdUntil = 0;
+  setHeld(on: boolean): void { this.held = on; if (!on) this.acc = 0; }
+  freeze(ms: number): void { this.holdUntil = performance.now() + ms; }
+
   setup(race: Race, hooks: SceneHooks, gameSpeed: number): void {
     this.race = race;
     this.hooks = hooks;
@@ -206,6 +212,7 @@ export class RaceScene extends Phaser.Scene {
 
   update(_t: number, deltaMs: number): void {
     if (!this.race) return;
+    if (this.held || performance.now() < this.holdUntil) { this.acc = 0; this.drawHorses(); return; }
     this.acc += Math.min(deltaMs, 100) / 1000 * this.gameSpeed;
     let n = 0;
     while (this.acc >= STEP && n < 12) {
