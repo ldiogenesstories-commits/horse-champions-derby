@@ -772,3 +772,9 @@ button.st-nameplate.editable { cursor: pointer; }
 .fx-line { margin-top: 4px; font-size: clamp(20px, 5vmin, 34px); font-weight: 900; letter-spacing: 3px; }
 .fx-name { margin-top: 4px; font-size: clamp(14px, 3.4vmin, 20px); font-weight: 700; opacity: .8; }
 .rn-sound { align-self: flex-end; padding: 6px 10px; font-size: 16px; }
+
+/* Global mute button: top-right on most screens; the ranch has its own; on the race
+   screen the position badge owns top-right, so it tucks into the bottom-left corner. */
+.snd-btn { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 10px; z-index: 50; width: 38px; height: 38px; border-radius: 50%; font-size: 16px; line-height: 1; background: var(--paper); border: 2.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); cursor: pointer; padding: 0; }
+body[data-screen="ranch"] .snd-btn, body:not([data-screen]) .snd-btn { display: none; }
+body[data-screen="race"] .snd-btn { top: auto; right: auto; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); opacity: .85; }

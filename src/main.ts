@@ -11,7 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { bugle, gateBell, isMuted, setMuted, unlockAudio } from './game/sfx';
+import { RaceAmbience, bugle, gateBell, isMuted, setMuted, unlockAudio } from './game/sfx';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -128,6 +128,8 @@ function transitionFor(from: Screen | undefined, to: Screen): TransitionKind | n
 }
 let pendingScreen: Screen | null = null;
 let finishSplashed = false;
+/** Crowd + hoofbeats for races on phones (the TV broadcast runs its own). */
+const raceAmb = new RaceAmbience();
 function show(id: Screen): void {
   if (id === 'stable' && home === 'ranch' && !forceBarn) id = 'ranch';
   // A transition is already covering the screen: just retarget where it lands.
@@ -144,6 +146,8 @@ function show(id: Screen): void {
 function showNow(id: Screen): void {
   if (id === 'stable' || id === 'ranch') renderStable();
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
+  document.body.dataset.screen = id; // lets the mute button find a free corner per screen
+  if (id !== 'race') raceAmb.stop();
   if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
 }
@@ -291,7 +295,12 @@ function launchRace(narratorSeed: number): void {
   show('race');
   // Don't start the clock while a curtain is still covering the gate.
   scene.setHeld(true);
-  void transitionDone().then(() => { if (race) { scene.setHeld(false); gateBell(); } });
+  void transitionDone().then(() => {
+    if (!race) return;
+    scene.setHeld(false);
+    gateBell();
+    if (!$('race').classList.contains('tv')) raceAmb.start();
+  });
   if (net) {
     // Family races start hand-ridden (every device agrees); keep your solo preference.
     const keep = rideAuto;
@@ -414,9 +423,11 @@ const hooks = {
     if (p.finished && !finishSplashed && !net?.tv) {
       finishSplashed = true;
       if (!net) scene.freeze(1700); // solo: true freeze-frame; family races keep running for everyone
+      raceAmb.duck(0.5);
       void playFinishSplash({ place: p.place, ord: ordinal(p.place), name: player.name, color: p.def.color });
     }
     renderRibbon(r);
+    phoneSoundscape(r);
     $('b-energy').style.width = `${p.energy}%`;
     $('b-conf').style.width = `${p.confidence}%`;
     $('b-cap').style.left = `${p.confCap}%`;
@@ -437,6 +448,18 @@ const hooks = {
     myInput({ lane });
   },
 };
+
+/** Crowd builds toward the wire; hooves are louder while your horse is in the thick of it. */
+function phoneSoundscape(r: Race): void {
+  const p = r.player;
+  if (!p) return;
+  if (p.finished) { raceAmb.set(0.65, 0.15, 0.5); return; }
+  const lead = Math.max(...r.horses.map((h) => h.dist));
+  const prog = Math.min(1, lead / r.distance);
+  const pack = r.horses.filter((h) => h !== p && Math.abs(h.dist - p.dist) < 6).length; // horses right around you
+  const crowd = 0.12 + 0.55 * prog * prog + (r.distance - lead < 240 ? 0.25 : 0);
+  raceAmb.set(crowd, 0.45 + Math.min(0.45, pack * 0.12), 1);
+}
 
 function tickNarration(r: Race): void {
     const now = performance.now();
@@ -1707,8 +1730,10 @@ $('rn-mode').addEventListener('click', () => setSteering(!ranch?.tapMode));
 // Sound: unlock on the first tap (browsers require it); mute toggle on the ranch.
 window.addEventListener('pointerdown', unlockAudio, { capture: true });
 window.addEventListener('keydown', unlockAudio, { capture: true });
-const renderMute = () => { $('rn-sound').textContent = isMuted() ? '🔇' : '🔊'; $('rn-sound').setAttribute('aria-label', isMuted() ? 'Turn sound on' : 'Turn sound off'); };
-$('rn-sound').addEventListener('click', () => { setMuted(!isMuted()); renderMute(); });
+const renderMute = () => {
+  for (const id of ['rn-sound', 'snd']) { $(id).textContent = isMuted() ? '🔇' : '🔊'; $(id).setAttribute('aria-label', isMuted() ? 'Turn sound on' : 'Turn sound off'); }
+};
+for (const id of ['rn-sound', 'snd']) $(id).addEventListener('click', () => { setMuted(!isMuted()); renderMute(); });
 renderMute();
 {
   // Floating thumb stick: touch down anywhere on the open field (either thumb) and
