@@ -37,6 +37,7 @@ import { Broadcast } from './game/broadcast';
 import { Ranch, type Station } from './game/ranch';
 import { backupCode, backupNow, cleanBackupCode, cleanCardCode, fetchCard, lastBackup, onBackupStatus, peekBackup, publishCard, restoreBackup, restoreUrl, scheduleBackup, useCardFoalSlot } from './net/cloud';
 import { SHARED_FOAL_LIMIT } from './career/breeding';
+import { showPedigree } from './career/pedigreeView';
 import { qrSVG } from './career/career';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
@@ -158,6 +159,8 @@ function showNow(id: Screen): void {
 }
 
 // ---------- Paddock ----------
+$('pc-tree').addEventListener('click', () => showPedigree(player));
+
 function renderPaddock(): void {
   $('pc-silk').innerHTML = portraitSVG(player, 72);
   $('pc-name').innerHTML = `${player.name.replace(/[<>&]/g, '')}${canRename() ? PENCIL : ''}`;
@@ -865,9 +868,13 @@ function renderHall(): void {
   void shareCards();
   $('hall-breed').hidden = !hall.length;
   $('hall-grid').innerHTML = hall.length
-    ? hall.map((c) => cardHTML(c)).join('')
+    ? hall.map((c) => `<div class="hall-item">${cardHTML(c)}<button class="ghost small hall-tree" data-tree="${c.code}">Family tree</button></div>`).join('')
     : `<p class="muted">No retired horses yet. Finish a ${CAREER_RACES}-race career, or add a card from family and friends.</p>`;
   void paintCardArt($('hall-grid'), hall);
+  $('hall-grid').querySelectorAll<HTMLButtonElement>('[data-tree]').forEach((b) => b.addEventListener('click', () => {
+    const c = hall.find((x) => x.code === b.dataset.tree);
+    if (c) showPedigree(c.horse, c.rank);
+  }));
   show('hall');
 }
 

@@ -788,3 +788,22 @@ button.st-nameplate.editable { cursor: pointer; }
 .snd-btn { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 10px; z-index: 50; width: 38px; height: 38px; border-radius: 50%; font-size: 16px; line-height: 1; background: var(--paper); border: 2.5px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); cursor: pointer; padding: 0; }
 body[data-screen="ranch"] .snd-btn, body:not([data-screen]) .snd-btn { display: none; }
 body[data-screen="race"] .snd-btn { top: auto; right: auto; left: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); opacity: .85; }
+
+/* Family tree */
+.ped-overlay { position: fixed; inset: 0; z-index: 60; background: rgba(43,33,24,0.6); display: grid; place-items: center; padding: 10px; }
+.ped-box { background: var(--paper); border: 4px solid var(--ink); border-radius: 18px; padding: 14px; width: min(100%, 720px); max-height: 92vh; overflow: auto; }
+.ped-tree { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 6px; margin-top: 10px; min-width: 560px; }
+.ped-col { display: flex; flex-direction: column; justify-content: space-around; gap: 6px; }
+.ped-cell { position: relative; border: 3px solid var(--ink); border-radius: 10px; padding: 4px 6px 4px 14px; background: #fff; font-size: 12px; line-height: 1.15; display: grid; }
+.ped-cell small { font-weight: 800; color: var(--ink-soft); font-size: 10px; }
+.ped-cell b { font-size: 13px; }
+.ped-cell em { font-style: normal; font-weight: 800; font-size: 11px; color: #8C6A00; }
+.ped-cell.champ { background: #FFF4C9; border-color: #B8962F; }
+.ped-cell.empty { opacity: 0.45; border-style: dashed; }
+.ped-cell.self { background: var(--turf); }
+.ped-dot { position: absolute; left: 3px; top: 6px; bottom: 6px; width: 6px; border-radius: 3px; background: var(--coat, #8A5A36); }
+.ped-line { display: inline-block; margin-top: 4px; padding: 3px 10px; border: 2px solid var(--ink); border-radius: 999px; background: #E6D9F7; font-weight: 800; font-size: 13px; }
+.ped-note { margin-top: 8px; }
+.hall-tree { margin-top: 4px; width: 100%; }
+.br-perks { margin: 4px 0 10px; padding-left: 18px; font-size: 13px; font-weight: 700; }
+.hall-item { display: grid; gap: 6px; justify-items: start; }
