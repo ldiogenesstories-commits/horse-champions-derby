@@ -3,7 +3,8 @@
 // paper-cut rider that sits on the full-body horse (same coordinates).
 
 export type SilksPattern = 'solid' | 'hoops' | 'stripes' | 'halves' | 'diamonds' | 'stars' | 'chevron' | 'sash';
-export type HairStyle = 'short' | 'ponytail' | 'braids' | 'locs' | 'puffs';
+export type HairStyle = 'short' | 'ponytail' | 'braids' | 'locs' | 'puffs' | 'spiky' | 'afro' | 'bun' | 'bob' | 'curlytop' | 'swoop';
+export type RiderBody = 'male' | 'female';
 
 export interface Jockey {
   name: string;
@@ -14,6 +15,8 @@ export interface Jockey {
   skin: string;
   hair: HairStyle;
   hairColor: string;
+  /** Male or female rider (faces); older saves without it ride as male. */
+  body?: RiderBody;
 }
 
 export const SILK_COLORS: [string, string][] = [
@@ -26,7 +29,11 @@ export const PATTERNS: [SilksPattern, string][] = [
   ['solid', 'Solid'], ['hoops', 'Hoops'], ['stripes', 'Stripes'], ['halves', 'Halves'],
   ['diamonds', 'Diamonds'], ['stars', 'Stars'], ['chevron', 'Chevron'], ['sash', 'Sash'],
 ];
-export const HAIRS: [HairStyle, string][] = [['short', 'Short'], ['ponytail', 'Ponytail'], ['braids', 'Braids'], ['locs', 'Locs'], ['puffs', 'Puffs']];
+export const HAIRS: [HairStyle, string][] = [
+  ['short', 'Short'], ['ponytail', 'Ponytail'], ['braids', 'Braids'], ['locs', 'Locs'], ['puffs', 'Puffs'], ['spiky', 'Spiky'],
+  ['afro', 'Afro'], ['bun', 'Bun'], ['bob', 'Bob'], ['curlytop', 'Curly top'], ['swoop', 'Swoop'],
+];
+export const BODIES: [RiderBody, string][] = [['male', 'Male'], ['female', 'Female']];
 
 export const DEFAULT_JOCKEY: Jockey = {
   name: 'You', pattern: 'hoops', primary: '#C8452D', secondary: '#FFFBF2', cap: '#2B2118',

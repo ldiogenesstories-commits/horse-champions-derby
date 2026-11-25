@@ -2,8 +2,8 @@ import { cleanName } from '../game/names';
 // Jockey room: name your jockey, pick silks, cap and rider looks.
 // Preview shows your jockey aboard your current horse.
 import type { HorseDef } from '../sim/types';
-import { DEFAULT_LOOK, horseBodySVG } from '../game/horseBody';
-import { HAIRS, HAIR_COLORS, PATTERNS, SILK_COLORS, SKIN_TONES, riderSVG, type Jockey } from '../game/jockey';
+import { BODIES, HAIRS, HAIR_COLORS, PATTERNS, SILK_COLORS, SKIN_TONES, type Jockey } from '../game/jockey';
+import { puppetFrames } from '../game/puppet';
 
 type Tab = 'silks' | 'colours' | 'cap' | 'rider';
 
@@ -26,20 +26,35 @@ export function runJockeyRoom(root: HTMLElement, horse: HorseDef, start: Jockey,
   const name = $('jr-name') as HTMLInputElement;
   name.value = j.name;
 
+  // Your rider aboard the felt puppet of your horse; re-baked when the jockey changes.
+  let drawn = '';
   const draw = () => {
-    $('jr-stage').innerHTML = horseBodySVG({ ...horse, color: j.primary }, horse.look ?? DEFAULT_LOOK, { rider: riderSVG(j) });
+    const key = JSON.stringify(j);
+    if (key === drawn) return;
+    drawn = key;
+    void puppetFrames({ ...horse, color: j.primary }, j, 1, 640, { mode: 'stand' }).then(([c]) => {
+      if (drawn !== key) return;
+      const img = new Image();
+      img.src = c.toDataURL('image/png');
+      img.alt = `${j.name} aboard ${horse.name}`;
+      img.className = 'jr-art';
+      $('jr-stage').replaceChildren(img);
+    });
   };
   const sw = (key: keyof Jockey, val: string, label: string) =>
     `<button class="gr-chip${j[key] === val ? ' on' : ''}" data-k="${key}" data-v="${val}" aria-pressed="${j[key] === val}"><i style="background:${val}"></i>${label}</button>`;
-  const ch = (key: keyof Jockey, val: string, label: string) =>
-    `<button class="gr-chip${j[key] === val ? ' on' : ''}" data-k="${key}" data-v="${val}" aria-pressed="${j[key] === val}">${label}</button>`;
+  const ch = (key: keyof Jockey, val: string, label: string) => {
+    const on = (j[key] ?? (key === 'body' ? 'male' : undefined)) === val;
+    return `<button class="gr-chip${on ? ' on' : ''}" data-k="${key}" data-v="${val}" aria-pressed="${on}">${label}</button>`;
+  };
   const chips = () => {
     let h = '';
     if (tab === 'silks') h = PATTERNS.map(([v, l]) => ch('pattern', v, l)).join('');
     if (tab === 'colours') h = '<div class="gr-sub">Main colour</div>' + SILK_COLORS.map(([v, l]) => sw('primary', v, l)).join('')
       + '<div class="gr-sub">Second colour</div>' + SILK_COLORS.map(([v, l]) => sw('secondary', v, l)).join('');
     if (tab === 'cap') h = SILK_COLORS.map(([v, l]) => sw('cap', v, l)).join('');
-    if (tab === 'rider') h = '<div class="gr-sub">Skin tone</div>' + SKIN_TONES.map(([v, l]) => sw('skin', v, l)).join('')
+    if (tab === 'rider') h = '<div class="gr-sub">Rider</div>' + BODIES.map(([v, l]) => ch('body', v, l)).join('')
+      + '<div class="gr-sub">Skin tone</div>' + SKIN_TONES.map(([v, l]) => sw('skin', v, l)).join('')
       + '<div class="gr-sub">Hair</div>' + HAIRS.map(([v, l]) => ch('hair', v, l)).join('')
       + '<div class="gr-sub">Hair colour</div>' + HAIR_COLORS.map(([v, l]) => sw('hairColor', v, l)).join('');
     $('jr-chips').innerHTML = h;
