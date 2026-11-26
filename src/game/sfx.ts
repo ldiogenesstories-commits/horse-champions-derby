@@ -344,9 +344,10 @@ export function critterSound(kind: string): void {
 
 /** A soft clop on the ranch grass, by gait. */
 export function hoofClop(gait: string): void {
+  const lvl = gait === 'canter' ? 1 : gait === 'trot' ? 0.75 : 0.5;
+  if (playSample('hoofClop', lvl)) return;
   if (!ready()) return;
   const t = now();
-  const lvl = gait === 'canter' ? 1 : gait === 'trot' ? 0.75 : 0.5;
   tone(t, 180 + Math.random() * 40, 0.06, 'sine', 0.08 * lvl, { slideTo: 90 });
   noise(t, 0.05, 'bandpass', 900, 600, 1.2, 0.05 * lvl, 0.002);
 }
@@ -452,6 +453,7 @@ export class SceneAmbience {
         this.next = t + 1.2 + Math.random() * 2;
       } else {
         birdsong(t + 0.05, this.tod < 0.35 ? 0.05 : 0.035);
+        if (Math.random() < 0.08) playSample('whinny', 0.6); // a far-off neigh
         if (Math.random() < 0.35) birdsong(t + 0.6 + Math.random() * 0.6, 0.025); // an answer
         this.next = t + (this.tod < 0.35 ? 2 : 3.5) + Math.random() * 4;
       }
@@ -461,6 +463,7 @@ export class SceneAmbience {
       if (r < 0.3) strawRustle(at);
       else if (r < 0.5) creak(at);
       else if (r < 0.7) snort(at);
+      else if (r < 0.76 && playSample('whinny', 0.8)) { /* a neigh from a neighbouring stall */ }
       else if (this.friends.length) critterSound(this.friends[Math.floor(Math.random() * this.friends.length)]);
       else strawRustle(at);
       this.next = t + 2.5 + Math.random() * 4.5;

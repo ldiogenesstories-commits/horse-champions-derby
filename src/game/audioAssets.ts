@@ -13,7 +13,11 @@ import { audioGraph, isMuted } from './sfx';
 
 export interface AudioEntry {
   /** Path under public/audio/, e.g. 'sfx/gate-bell.mp3'. */
-  file: string;
+  file?: string;
+  /** Several takes instead of one; a random one plays each time (keeps repeats from sounding robotic). */
+  files?: string[];
+  /** Minimum seconds between plays, for sounds that fire rapidly (like hoofbeats). */
+  minGap?: number;
   /** Loudness trim, 0-1 (default 1). */
   volume?: number;
   /** Shown on the Options > Credits screen (required for CC-BY sources). */
@@ -22,15 +26,21 @@ export interface AudioEntry {
 
 /** Short effects. Keys match the function names in sfx.ts. */
 export const SOUNDS: Record<string, AudioEntry> = {
-  // gateBell:   { file: 'sfx/gate-bell.mp3', volume: 0.9, credit: '"Gate bell" by Name (CC0)' },
-  // crowdRoar:  { file: 'sfx/crowd-cheer.mp3' },
+  // Call to the post (trumpet from "atpost.wav" by rdb, CC0), played on the pre-race screen.
+  bugle: { file: 'sfx/at-post-trumpet.mp3', volume: 0.9 },
+  // Ranch hoofbeats: two earth/grass surface takes, scaled by gait in hoofClop().
+  hoofClop: { files: ['hoof/grass.mp3', 'hoof/ground.mp3'], volume: 0.8, minGap: 0.4 },
+  // Whinnies from "Horse Sounds (SE515)" by MPooman (CC0), heard now and then in the barn and on the ranch.
+  whinny: { files: ['sfx/whinny-1.mp3', 'sfx/whinny-2.mp3', 'sfx/whinny-3.mp3', 'sfx/whinny-4.mp3', 'sfx/whinny-5.mp3', 'sfx/whinny-6.mp3'], volume: 0.7, minGap: 8 },
+  // More slots (add a file in public/audio/ and uncomment or add a line):
+  // gateBell:     { file: 'sfx/gate-bell.mp3' },
+  // crowdRoar:    { file: 'sfx/crowd-cheer.mp3' },
   // crowdRoarWin: { file: 'sfx/crowd-cheer-big.mp3' },
-  // bugle:      { file: 'sfx/bugle.mp3' },
-  // finishHit:  { file: 'sfx/finish-hit.mp3' },
-  // logoChime:  { file: 'sfx/chime.mp3' },
+  // finishHit:    { file: 'sfx/finish-hit.mp3' },
+  // logoChime:    { file: 'sfx/chime.mp3' },
   // curtainSwish: { file: 'sfx/curtain.mp3' },
-  // naturePops: { file: 'sfx/pops.mp3' },
-  // cameraCut:  { file: 'sfx/camera-cut.mp3' },
+  // naturePops:   { file: 'sfx/pops.mp3' },
+  // cameraCut:    { file: 'sfx/camera-cut.mp3' },
   // 'critter:bird': { file: 'sfx/bird.mp3' },
 };
 
@@ -48,55 +58,62 @@ export function audioCredits(): string[] {
 }
 
 // ---------- loading ----------
+// Buffers are cached by file path, so one file can serve several keys.
 const buffers = new Map<string, AudioBuffer>();
 const pending = new Map<string, Promise<AudioBuffer | null>>();
 const failed = new Set<string>();
+const lastPlayed = new Map<string, number>();
 
-const urlFor = (e: AudioEntry) => `${import.meta.env.BASE_URL}audio/${e.file}`;
+const urlFor = (file: string) => `${import.meta.env.BASE_URL}audio/${file}`;
+const filesOf = (e: AudioEntry): string[] => e.files ?? (e.file ? [e.file] : []);
 
-function load(id: string, e: AudioEntry): Promise<AudioBuffer | null> {
-  const have = buffers.get(id);
+function load(file: string): Promise<AudioBuffer | null> {
+  const have = buffers.get(file);
   if (have) return Promise.resolve(have);
-  if (failed.has(id)) return Promise.resolve(null);
-  let p = pending.get(id);
+  if (failed.has(file)) return Promise.resolve(null);
+  let p = pending.get(file);
   if (!p) {
     const g = audioGraph();
     if (!g) return Promise.resolve(null); // audio not unlocked yet; try again after a tap
-    p = fetch(urlFor(e))
+    p = fetch(urlFor(file))
       .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
       .then((ab) => g.ctx.decodeAudioData(ab))
-      .then((buf) => { buffers.set(id, buf); return buf; })
-      .catch(() => { failed.add(id); return null; })
-      .finally(() => pending.delete(id));
-    pending.set(id, p);
+      .then((buf) => { buffers.set(file, buf); return buf; })
+      .catch(() => { failed.add(file); return null; })
+      .finally(() => pending.delete(file));
+    pending.set(file, p);
   }
   return p;
 }
 
-/** Fetch and decode files ahead of time (call after the first tap, e.g. on the home menu). */
+/** Fetch and decode files ahead of time (runs once audio is unlocked by the first tap). */
 export function preloadAudio(): void {
-  for (const [k, e] of Object.entries(SOUNDS)) void load('s:' + k, e);
+  for (const e of Object.values(SOUNDS)) for (const f of filesOf(e)) void load(f);
 }
 
 // ---------- sound effects ----------
 /**
  * Play a sound effect from a file. Returns true if a file is handling it, so the
  * caller can skip its synthesized version; false means "use the synth fallback".
+ * `scale` trims the loudness for this play (e.g. quieter hoofbeats at a walk).
  */
-export function playSample(key: string): boolean {
+export function playSample(key: string, scale = 1): boolean {
   const e = SOUNDS[key];
   const g = audioGraph();
-  if (!e || !g || failed.has('s:' + key)) return false;
-  const buf = buffers.get('s:' + key);
-  if (!buf) {
-    void load('s:' + key, e); // first use: fetch now, synth covers this one play
+  if (!e || !g) return false;
+  const ready = filesOf(e).filter((f) => buffers.has(f));
+  if (!ready.length) {
+    for (const f of filesOf(e)) void load(f); // first use: fetch now, synth covers this one play
     return false;
   }
   if (isMuted() || g.ctx.state !== 'running') return true;
+  const t = g.ctx.currentTime;
+  if (e.minGap && t - (lastPlayed.get(key) ?? -999) < e.minGap) return true;
+  lastPlayed.set(key, t);
   const src = g.ctx.createBufferSource();
-  src.buffer = buf;
+  src.buffer = buffers.get(ready[Math.floor(Math.random() * ready.length)])!;
   const gain = g.ctx.createGain();
-  gain.gain.value = e.volume ?? 1;
+  gain.gain.value = (e.volume ?? 1) * scale;
   src.connect(gain).connect(g.out);
   src.start();
   return true;
@@ -113,7 +130,7 @@ export async function playMusic(key: string, opts: { loop?: boolean; fade?: numb
   if (!e || !g) return;
   if (current?.key === key) return;
   wanted = key;
-  const buf = await load('m:' + key, e);
+  const buf = e.file ? await load(e.file) : null;
   if (!buf || wanted !== key) return; // failed, or a newer request won
   const fade = opts.fade ?? 1.2;
   const t = g.ctx.currentTime;
