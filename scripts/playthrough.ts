@@ -40,10 +40,19 @@ const DRILLS = [
 const RACE_FATIGUE = 35, DRILL_FATIGUE = 25, ACTIONS = 3;
 
 /** A decent (not perfect) player's drill grades. */
+export type Skill = 'new' | 'decent' | 'skilled';
+/** Drill grade odds [S, A, B, C] (rest D) for each kind of player. */
+const GRADE_ODDS: Record<Skill, number[]> = { new: [0.02, 0.15, 0.4, 0.3], decent: [0.1, 0.35, 0.35, 0.15], skilled: [0.3, 0.45, 0.2, 0.05] };
+let skill: Skill = 'decent';
 function grade(rng: () => number): Grade {
-  const r = rng();
-  return r < 0.1 ? 'S' : r < 0.45 ? 'A' : r < 0.8 ? 'B' : r < 0.95 ? 'C' : 'D';
+  const o = GRADE_ODDS[skill];
+  let r = rng();
+  for (const [i, g] of (['S', 'A', 'B', 'C'] as Grade[]).entries()) { if (r < o[i]) return g; r -= o[i]; }
+  return 'D';
 }
+
+/** A snapshot of the horse just before a race week's race, for side experiments. */
+export interface RaceWeekCtx { week: number; horse: HorseDef; confidence: number; confCap: number; startEnergy: number; career: CareerLog }
 
 /** Should this strategy race this week (true) or take a training week? */
 function racesThisWeek(s: Strategy, week: number, races: number): boolean {
@@ -70,7 +79,8 @@ export interface Result {
 }
 
 export type { Strategy };
-export function playCareer(foal: HorseDef, strategy: Strategy, name: string, seed: number): Result {
+export function playCareer(foal: HorseDef, strategy: Strategy, name: string, seed: number, opts: { skill?: Skill; onRaceWeek?: (c: RaceWeekCtx) => void } = {}): Result {
+  skill = opts.skill ?? 'decent';
   const h: HorseDef = structuredClone({ ...foal, name });
   const rng = makeRng(seed);
   const total = () => STAT_KEYS.reduce((t, k) => t + h.stats[k], 0);
@@ -137,6 +147,7 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
       if (big) bigRaces++;
       const me = field.find((e) => e.isPlayer)!;
       me.startEnergy = Math.round(100 - Math.max(0, fatigue - 40) * 0.5 - (fed ? 0 : 5));
+      opts.onRaceWeek?.({ week, horse: structuredClone(h), confidence, confCap, startEnergy: me.startEnergy, career: structuredClone(career) });
       const race = new Race(field, seed * 31 + races, undefined, DISTANCES[distKey]);
       let guard = 0;
       while (!race.finished && guard++ < 30 * 600) race.step();
