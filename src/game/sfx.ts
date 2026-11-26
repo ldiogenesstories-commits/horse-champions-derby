@@ -2,6 +2,8 @@
 // nothing to license or download. Each effect is a small recipe of oscillators,
 // filtered noise and envelopes.
 
+import { playSample, preloadAudio } from './audioAssets';
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
@@ -19,6 +21,7 @@ export function unlockAudio(): void {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    preloadAudio(); // fetch any real sound files now that audio is unlocked
   }
   if (ctx.state === 'suspended') void ctx.resume();
 }
@@ -98,6 +101,7 @@ const now = () => ctx!.currentTime + 0.01;
 
 /** Heavy velvet sweeping across: a filtered-noise whoosh with a fabric rustle. */
 export function curtainSwish(opening = false): void {
+  if (playSample('curtainSwish')) return;
   if (!ready()) return;
   const t = now();
   noise(t, 0.65, 'bandpass', opening ? 1800 : 500, opening ? 500 : 1800, 0.9, 0.35, 0.12);
@@ -107,6 +111,7 @@ export function curtainSwish(opening = false): void {
 
 /** A little music-box chime when the logo appears. */
 export function logoChime(): void {
+  if (playSample('logoChime')) return;
   if (!ready()) return;
   const t = now();
   [1046.5, 1318.5, 1568, 2093].forEach((f, i) => {
@@ -117,6 +122,7 @@ export function logoChime(): void {
 
 /** Grass and flowers popping up, with a couple of birds. */
 export function naturePops(): void {
+  if (playSample('naturePops')) return;
   if (!ready()) return;
   const t = now();
   for (let i = 0; i < 14; i++) {
@@ -132,6 +138,7 @@ export function naturePops(): void {
 
 /** An original bugle fanfare on the natural notes of a bugle (C-G-C-E-G). */
 export function bugle(): void {
+  if (playSample('bugle')) return;
   if (!ready()) return;
   const t = now();
   const G4 = 392, C5 = 523.3, E5 = 659.3, G5 = 784;
@@ -148,6 +155,7 @@ export function bugle(): void {
 
 /** The starting bell as the gates fly open. */
 export function gateBell(): void {
+  if (playSample('gateBell')) return;
   if (!ready()) return;
   const t = now();
   for (let i = 0; i < 6; i++) {
@@ -159,6 +167,7 @@ export function gateBell(): void {
 
 /** The comic "POW" as the finish panel slams in. */
 export function finishHit(): void {
+  if (playSample('finishHit')) return;
   if (!ready()) return;
   const t = now();
   tone(t, 160, 0.3, 'sine', 0.6, { slideTo: 40 });
@@ -167,6 +176,7 @@ export function finishHit(): void {
 
 /** The crowd: a roar that swells and fades; bigger, with whistles and a fanfare, for a win. */
 export function crowdRoar(win = false, top3 = false): void {
+  if (playSample(win ? 'crowdRoarWin' : 'crowdRoar')) return;
   if (!ready()) return;
   const t = now();
   const peak = win ? 0.32 : top3 ? 0.22 : 0.12;
@@ -191,6 +201,7 @@ export function crowdRoar(win = false, top3 = false): void {
 
 /** A quick camera-cut whoosh between broadcast shots. */
 export function cameraCut(): void {
+  if (playSample('cameraCut')) return;
   if (!ready()) return;
   noise(now(), 0.18, 'bandpass', 2500, 900, 1.2, 0.07, 0.01);
 }
@@ -314,6 +325,7 @@ export class RaceAmbience {
 
 /** Little voices for ranch critters (tap, play, scatter). */
 export function critterSound(kind: string): void {
+  if (playSample('critter:' + kind)) return;
   if (!ready()) return;
   const t = now();
   switch (kind) {
