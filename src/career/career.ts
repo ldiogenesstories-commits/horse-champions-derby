@@ -1,3 +1,4 @@
+import { hd } from '../game/money';
 import { ARC_LABEL, arcOf } from '../sim/arc';
 // Career arc: a horse races 25 times, then retires with a ceremony, a rank,
 // badges, and a collectible virtual card (unique code + QR) for the Hall of Fame.
@@ -23,6 +24,8 @@ export interface CareerLog {
   gpWins?: number;
   /** Career points from placings, weighted by class. */
   ladderPts?: number;
+  /** Horse Dollars won in prizes this career. */
+  earnings?: number;
   /** Big races won (names). */
   bigWins?: string[];
   /** Head-to-head records against named rivals. */
@@ -40,6 +43,8 @@ export interface RetiredCard {
   rank: string;
   badges: string[];
   trust: number;
+  /** Prize money won over the career. */
+  earnings?: number;
   retiredOn: string; // ISO date
   jockey?: Jockey;
   /** Uploaded so other phones can scan it in. */
@@ -65,6 +70,7 @@ export function rankFor(points: number): string {
 
 export function badgesFor(log: CareerLog, trust: number): string[] {
   const b: string[] = [];
+  if ((log.earnings ?? 0) >= 1_000_000) b.push('💰 Millionaire');
   for (const w of [...new Set(log.bigWins ?? [])]) b.push(`🏆 ${w} winner`);
   if (log.gpWins) b.push(log.gpWins > 1 ? `${log.gpWins}x Grand Prix winner` : 'Grand Prix winner');
   else if ((log.topClass ?? 0) > 0) b.push(`Reached ${['Maiden', 'Novice', 'Graded', 'Stakes', 'Grand Prix'][log.topClass!]}`);
@@ -148,6 +154,7 @@ export function cardHTML(c: RetiredCard): string {
     ${c.jockey ? `<div class="hcard-jockey">${silksBadge(c.jockey, 16)} Ridden by ${c.jockey.name}</div>` : ''}
     <div class="hcard-jockey">${ARC_LABEL[arcOf(c.horse)]}</div>
     <div class="hcard-rec">${c.record.w}–${c.record.p}–${c.record.s} <small>in ${c.races} races · ${c.points} pts</small></div>
+    ${c.earnings ? `<div class="hcard-earn">Earned ${hd(c.earnings)}</div>` : ''}
     <div class="hcard-stats">${STAT_ROWS.map(([k, l]) => `<div><span>${l}</span><b>${Math.round(s[k])}</b><i style="width:${Math.round(s[k])}%"></i></div>`).join('')}</div>
     ${c.badges.length ? `<ul class="hcard-badges">${c.badges.map((b) => `<li>${b}</li>`).join('')}</ul>` : ''}
     <footer class="hcard-foot"><div><b>${c.code}</b><small>Retired ${date}</small></div>${qrSVG(qrPayload(c), 76)}</footer>

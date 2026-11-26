@@ -5,7 +5,7 @@ import type { Jockey } from '../game/jockey';
 import type { Look } from '../game/horseBody';
 import { puppetFrames } from '../game/puppet';
 import { portraitSVG } from '../game/portrait';
-import { hd, hdCoin } from '../game/money';
+import { hd, hdCoin, hdShort } from '../game/money';
 import { LOGO } from '../game/transitions';
 import { isMuted, setMuted } from '../game/sfx';
 import {
@@ -68,7 +68,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
   root.innerHTML = `<div class="hm-back">${BACKDROP}</div><div class="hm-front" id="hm-front"></div>`;
   const front = root.querySelector('#hm-front') as HTMLElement;
 
-  const walletChip = () => `<div class="hm-wallet">${hdCoin(22)}<b>${hd(wallet())}</b></div>`;
+  const walletChip = () => `<div class="hm-wallet" title="${wallet().toLocaleString('en-US')} Horse Dollars">${hdCoin(22)}<b>${hdShort(wallet())}</b></div>`;
 
   function render(): void {
     if (page === 'menu') menu();

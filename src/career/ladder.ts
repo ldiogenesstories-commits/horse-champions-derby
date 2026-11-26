@@ -18,10 +18,10 @@ export interface RaceClass {
 
 export const CLASSES: RaceClass[] = [
   { name: 'Maiden', rivals: [40, 64], prize: 1, points: 1, winsToMove: 1, fee: 0 },
-  { name: 'Novice', rivals: [48, 70], prize: 1.25, points: 1.15, winsToMove: 2, fee: 25 },
-  { name: 'Graded', rivals: [54, 76], prize: 1.6, points: 1.3, winsToMove: 3, fee: 50 },
-  { name: 'Stakes', rivals: [60, 82], prize: 2.2, points: 1.5, winsToMove: 3, fee: 100 },
-  { name: 'Grand Prix', rivals: [66, 88], prize: 3, points: 1.8, winsToMove: Infinity, fee: 150 },
+  { name: 'Novice', rivals: [48, 70], prize: 1.25, points: 1.15, winsToMove: 2, fee: 2_500 },
+  { name: 'Graded', rivals: [54, 76], prize: 1.6, points: 1.3, winsToMove: 3, fee: 5_000 },
+  { name: 'Stakes', rivals: [60, 82], prize: 2.2, points: 1.5, winsToMove: 3, fee: 10_000 },
+  { name: 'Grand Prix', rivals: [66, 88], prize: 3, points: 1.8, winsToMove: Infinity, fee: 15_000 },
 ];
 /** Base career points for 1st, 2nd and 3rd (before the class multiplier). */
 export const PLACE_POINTS = [10, 6, 3];

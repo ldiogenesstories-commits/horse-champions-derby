@@ -930,3 +930,4 @@ body[data-screen="menu"] #snd { display: none; }
 .hm-fac { font-size: 30px; }
 .hm-item small { font-size: 11px; line-height: 1.2; }
 .big-card button.big, .up-card button.big { white-space: normal; height: auto; min-height: 52px; padding: 8px 16px; width: 100%; }
+.hcard-earn { font-weight: 800; font-size: 13px; color: #8C6A00; }
