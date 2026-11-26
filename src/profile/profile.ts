@@ -13,7 +13,7 @@ const NEXT_KEY = 'hcd-next-screen';
 
 // ---- Economy (placeholders; tune later) ----
 /** Horse Dollars paid per finishing place (index 0 = 1st). */
-export const PRIZES = [250, 100, 60, 20, 20];
+export const PRIZES = [25_000, 10_000, 6_000, 2_000, 2_000];
 /** Event races pay this much more. */
 export const EVENT_BONUS = 1.5;
 /** A new horse costs the same as four wins. */
@@ -32,6 +32,8 @@ export interface Profile {
   slots: number;
   freeHorseClaimed: boolean;
   totalRaces: number;
+  /** Economy version: 2 = prices and prizes x100 (Nov 2026). */
+  econ?: number;
 }
 export interface StableEntry { id: string; save: string | null }
 export interface Stable { activeId: string; horses: StableEntry[] }
@@ -55,6 +57,12 @@ const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.st
 
 let profile: Profile = read<Profile>(PROFILE_KEY, { hd: 0, owned: [], slots: START_SLOTS, freeHorseClaimed: false, totalRaces: 0 });
 let stable: Stable = read<Stable>(STABLE_KEY, { activeId: '', horses: [] });
+// Prices and prizes went up 100x: older wallets go up 100x too (once).
+if ((profile.econ ?? 1) < 2) {
+  profile.hd = Math.round(profile.hd * 100);
+  profile.econ = 2;
+  write(PROFILE_KEY, profile);
+}
 const listeners = new Set<() => void>();
 const changed = () => { write(PROFILE_KEY, profile); listeners.forEach((f) => f()); };
 

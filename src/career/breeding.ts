@@ -17,7 +17,7 @@ const COATS = ['bay', 'chestnut', 'grey', 'black', 'palomino'] as const;
 export const HOME_FOAL_LIMIT = 3;
 export const SHARED_FOAL_LIMIT = 4;
 /** Placeholder price in Horse Dollars; tune against race prizes once the wallet exists. */
-export const PREMIER_COST = 500;
+export const PREMIER_COST = 50_000;
 
 /** Foals a card has left on this ranch. Guest cards (scanned in) use the shared limit instead. */
 export const homeFoalsLeft = (h: HorseDef): number => Math.max(0, HOME_FOAL_LIMIT - (h.foals ?? 0));

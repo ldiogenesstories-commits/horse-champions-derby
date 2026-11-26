@@ -21,10 +21,10 @@ export interface BigRace {
 }
 
 export const BIG_RACES: BigRace[] = [
-  { id: 'spring', name: 'Spring Classic', week: 12, dist: 'mile', rivals: [54, 76], prize: 4, points: 1.6, winBonus: 15, fee: 100, blurb: 'The first big test of the season, over a mile.' },
-  { id: 'derby', name: 'Royal Derby', week: 24, dist: 'classic', rivals: [60, 82], prize: 6, points: 2, winBonus: 25, fee: 150, blurb: 'The race every owner dreams of. Two laps of the Classic course.' },
-  { id: 'sprint', name: 'Autumn Sprint Cup', week: 34, dist: 'sprint', rivals: [64, 86], prize: 6, points: 2, winBonus: 25, fee: 150, blurb: 'Six furlongs of pure speed. Blink and it\'s over.' },
-  { id: 'champ', name: 'Grand Championship', week: 45, dist: 'classic', rivals: [70, 92], prize: 10, points: 2.5, winBonus: 40, fee: 250, blurb: 'The season finale. Only the best are still in form by now.' },
+  { id: 'spring', name: 'Spring Classic', week: 12, dist: 'mile', rivals: [54, 76], prize: 4, points: 1.6, winBonus: 15, fee: 10_000, blurb: 'The first big test of the season, over a mile.' },
+  { id: 'derby', name: 'Royal Derby', week: 24, dist: 'classic', rivals: [60, 82], prize: 6, points: 2, winBonus: 25, fee: 15_000, blurb: 'The race every owner dreams of. Two laps of the Classic course.' },
+  { id: 'sprint', name: 'Autumn Sprint Cup', week: 34, dist: 'sprint', rivals: [64, 86], prize: 6, points: 2, winBonus: 25, fee: 15_000, blurb: 'Six furlongs of pure speed. Blink and it\'s over.' },
+  { id: 'champ', name: 'Grand Championship', week: 45, dist: 'classic', rivals: [70, 92], prize: 10, points: 2.5, winBonus: 40, fee: 25_000, blurb: 'The season finale. Only the best are still in form by now.' },
 ];
 
 export const bigRaceOn = (week: number): BigRace | null => BIG_RACES.find((b) => b.week === week) ?? null;

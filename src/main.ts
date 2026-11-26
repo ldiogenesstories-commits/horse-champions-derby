@@ -46,7 +46,20 @@ import {
 import { ownedDecor } from './profile/shop';
 import { decorSVG } from './profile/decor';
 import { runHome } from './menu/home';
-import { hd, hdCoin } from './game/money';
+import { hd, hdCoin, hdShort } from './game/money';
+
+/** Prize money ticks up like a slot machine (about a second). */
+function countUp(el: HTMLElement, to: number): void {
+  const t0 = performance.now();
+  const dur = Math.min(1400, 500 + Math.log10(Math.max(10, to)) * 150);
+  const tick = (t: number) => {
+    const k = Math.min(1, (t - t0) / dur);
+    el.innerHTML = hd(Math.round(to * (1 - (1 - k) ** 3) / 10) * 10);
+    if (k < 1) requestAnimationFrame(tick);
+    else el.innerHTML = hd(to);
+  };
+  requestAnimationFrame(tick);
+}
 import { PREMIER_COST } from './career/breeding';
 import { canEnterUp, currentClass, ladderLine, recordFinish, termsFor, CLASSES, type RaceTerms } from './career/ladder';
 import { bigRaceOn, nextBigRace, type BigRace } from './career/bigRaces';
@@ -520,8 +533,10 @@ function showResults(r: Race): void {
   const rivalLines = net ? [] : recordRivals(career, p.place, st.filter((h) => rivalOf(h.def.id)).map((h) => ({ id: h.def.id, place: h.place })));
   const bigLine = ranBig ? (p.place === 1 ? `🏆 ${player.name} wins the ${ranBig.name}!` : `${ranBig.name}: finished ${ordinal(p.place)}.`) : '';
   if (prize) earn(prize);
+  if (!net && prize) career.earnings = (career.earnings ?? 0) + prize;
   $('res-prize').hidden = !prize;
-  $('res-prize').innerHTML = prize ? `${hdCoin(26)}<span>Prize money <b>${hd(prize)}</b> · Wallet ${hd(wallet())}</span>` : '';
+  $('res-prize').innerHTML = prize ? `${hdCoin(26)}<span>Prize money <b id="res-prize-n">${hd(0)}</b> · Wallet ${hdShort(wallet())}</span>` : '';
+  if (prize) countUp($('res-prize-n'), prize);
   if (!career.distances.includes(distKey)) career.distances.push(distKey);
   career.bestPlace = Math.min(career.bestPlace, p.place);
   if (raceEvent && p.place === 1) career.eventWins.push(raceEvent.name);
@@ -827,6 +842,7 @@ function retire(): void {
       points,
       rank: rankFor(points),
       badges: badgesFor(career, trust),
+      earnings: career.earnings ?? 0,
       trust,
       retiredOn: new Date().toISOString(),
       jockey: { ...jockey },
@@ -1649,7 +1665,7 @@ function renderRaceOffice(): void {
   $('big-card').hidden = !big;
   if (big) {
     $('big-title').textContent = `${big.name} · ${DIST_INFO[big.dist].label}`;
-    $('big-blurb').textContent = `${big.blurb} Prizes ×${big.prize}, a trophy, and a win counts double toward moving up. Entry ħ${big.fee}.`;
+    $('big-blurb').textContent = `${big.blurb} Prizes ×${big.prize}, a trophy, and a win counts double toward moving up. Entry ħ${big.fee.toLocaleString("en-US")}.`;
     $('big-rivals').innerHTML = rivalsFor(0, true).map((r) => `<li><b>${r.name}</b> · ${r.tagline}</li>`).join('');
     $('big-enter').textContent = bigEntered ? 'Entered ✓ (tap to skip it)' : `Enter the ${big.name}`;
     $('big-card').classList.toggle('on', bigEntered);
@@ -1659,7 +1675,7 @@ function renderRaceOffice(): void {
   $('up-card').hidden = !up;
   if (up) {
     const next = CLASSES[(career.cls ?? 0) + 1];
-    $('up-blurb').textContent = `Race against ${next.name} horses for ×${next.prize} prizes and more career points. A win counts double toward moving up. Entry ħ${next.fee}.`;
+    $('up-blurb').textContent = `Race against ${next.name} horses for ×${next.prize} prizes and more career points. A win counts double toward moving up. Entry ħ${next.fee.toLocaleString("en-US")}.`;
     $('up-enter').textContent = upEntered ? 'Entered up ✓ (tap to undo)' : `Enter up to ${next.name}`;
     $('up-card').classList.toggle('on', upEntered);
   }

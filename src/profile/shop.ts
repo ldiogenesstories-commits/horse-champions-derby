@@ -15,31 +15,31 @@ export const SHOP_SECTIONS: { kind: ShopKind; title: string; note: string }[] = 
 ];
 
 export const SHOP: ShopItem[] = [
-  { id: 'bow:#C9A7E8', kind: 'bow', label: 'Lavender', value: '#C9A7E8', price: 150 },
-  { id: 'bow:#9FDCB8', kind: 'bow', label: 'Mint', value: '#9FDCB8', price: 150 },
-  { id: 'bow:#F28C6B', kind: 'bow', label: 'Coral', value: '#F28C6B', price: 150 },
-  { id: 'bow:#3F63B8', kind: 'bow', label: 'Royal blue', value: '#3F63B8', price: 150 },
-  { id: 'bow:#2B2118', kind: 'bow', label: 'Midnight', value: '#2B2118', price: 150 },
+  { id: 'bow:#C9A7E8', kind: 'bow', label: 'Lavender', value: '#C9A7E8', price: 4_000 },
+  { id: 'bow:#9FDCB8', kind: 'bow', label: 'Mint', value: '#9FDCB8', price: 4_000 },
+  { id: 'bow:#F28C6B', kind: 'bow', label: 'Coral', value: '#F28C6B', price: 4_000 },
+  { id: 'bow:#3F63B8', kind: 'bow', label: 'Royal blue', value: '#3F63B8', price: 4_000 },
+  { id: 'bow:#2B2118', kind: 'bow', label: 'Midnight', value: '#2B2118', price: 4_000 },
 
-  { id: 'pad:#E2A93B', kind: 'pad', label: 'Gold pad', value: '#E2A93B', price: 200 },
-  { id: 'pad:#22355E', kind: 'pad', label: 'Navy pad', value: '#22355E', price: 200 },
-  { id: 'pad:#7A3E8E', kind: 'pad', label: 'Plum pad', value: '#7A3E8E', price: 200 },
-  { id: 'pad:#F4EBD8', kind: 'pad', label: 'Ivory pad', value: '#F4EBD8', price: 200 },
-  { id: 'pad:#3E6B48', kind: 'pad', label: 'Racing green pad', value: '#3E6B48', price: 200 },
+  { id: 'pad:#E2A93B', kind: 'pad', label: 'Gold pad', value: '#E2A93B', price: 20_000 },
+  { id: 'pad:#22355E', kind: 'pad', label: 'Navy pad', value: '#22355E', price: 20_000 },
+  { id: 'pad:#7A3E8E', kind: 'pad', label: 'Plum pad', value: '#7A3E8E', price: 20_000 },
+  { id: 'pad:#F4EBD8', kind: 'pad', label: 'Ivory pad', value: '#F4EBD8', price: 20_000 },
+  { id: 'pad:#3E6B48', kind: 'pad', label: 'Racing green pad', value: '#3E6B48', price: 20_000 },
 
-  { id: 'silks:checks', kind: 'silks', label: 'Checks', value: 'checks', price: 300 },
-  { id: 'silks:spots', kind: 'silks', label: 'Spots', value: 'spots', price: 300 },
-  { id: 'silks:quarters', kind: 'silks', label: 'Quarters', value: 'quarters', price: 300 },
-  { id: 'silks:bolt', kind: 'silks', label: 'Lightning', value: 'bolt', price: 350 },
+  { id: 'silks:checks', kind: 'silks', label: 'Checks', value: 'checks', price: 7_500 },
+  { id: 'silks:spots', kind: 'silks', label: 'Spots', value: 'spots', price: 7_500 },
+  { id: 'silks:quarters', kind: 'silks', label: 'Quarters', value: 'quarters', price: 7_500 },
+  { id: 'silks:bolt', kind: 'silks', label: 'Lightning', value: 'bolt', price: 8_500 },
 
-  { id: 'decor:bunting', kind: 'decor', label: 'Bunting', value: 'bunting', price: 250, blurb: 'Party flags along the rafters.' },
-  { id: 'decor:flowers', kind: 'decor', label: 'Flower boxes', value: 'flowers', price: 250, blurb: 'Window boxes on the stall doors.' },
-  { id: 'decor:lantern', kind: 'decor', label: 'Lantern', value: 'lantern', price: 200, blurb: 'A warm brass lantern.' },
-  { id: 'decor:trophy', kind: 'decor', label: 'Trophy shelf', value: 'trophy', price: 400, blurb: 'Shows off a gold cup.' },
-  { id: 'decor:sign', kind: 'decor', label: 'Lucky horseshoe', value: 'sign', price: 300, blurb: 'Hung over the door for luck.' },
-  { id: 'facility:track', kind: 'facility', label: 'Training track', value: 'track', price: 3000, blurb: 'Drills gain 10% more.' },
-  { id: 'facility:spa', kind: 'facility', label: 'Stable spa', value: 'spa', price: 2000, blurb: 'Rest clears 65 fatigue instead of 50.' },
-  { id: 'decor:rug', kind: 'decor', label: 'Woven rug', value: 'rug', price: 300, blurb: 'A cozy rug for the aisle.' },
+  { id: 'decor:bunting', kind: 'decor', label: 'Bunting', value: 'bunting', price: 25_000, blurb: 'Party flags along the rafters.' },
+  { id: 'decor:flowers', kind: 'decor', label: 'Flower boxes', value: 'flowers', price: 25_000, blurb: 'Window boxes on the stall doors.' },
+  { id: 'decor:lantern', kind: 'decor', label: 'Lantern', value: 'lantern', price: 20_000, blurb: 'A warm brass lantern.' },
+  { id: 'decor:trophy', kind: 'decor', label: 'Trophy shelf', value: 'trophy', price: 40_000, blurb: 'Shows off a gold cup.' },
+  { id: 'decor:sign', kind: 'decor', label: 'Lucky horseshoe', value: 'sign', price: 30_000, blurb: 'Hung over the door for luck.' },
+  { id: 'facility:track', kind: 'facility', label: 'Training track', value: 'track', price: 300_000, blurb: 'Drills gain 10% more.' },
+  { id: 'facility:spa', kind: 'facility', label: 'Stable spa', value: 'spa', price: 200_000, blurb: 'Rest clears 65 fatigue instead of 50.' },
+  { id: 'decor:rug', kind: 'decor', label: 'Woven rug', value: 'rug', price: 30_000, blurb: 'A cozy rug for the aisle.' },
 ];
 
 const has = (kind: ShopKind) => SHOP.filter((i) => i.kind === kind && owns(i.id));

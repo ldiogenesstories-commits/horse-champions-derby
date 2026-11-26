@@ -11,5 +11,15 @@ export function hdCoin(px = 40): string {
   return `<svg viewBox="0 0 112 112" width="${px}" height="${px}" aria-hidden="true"><circle cx="56" cy="56" r="52" fill="#FFD23F" stroke="${INK}" stroke-width="5"/><circle cx="56" cy="56" r="41" fill="none" stroke="#B8962F" stroke-width="3"/><g stroke="${INK}" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M44 26 V84 M44 62 Q44 48 57 48 Q70 48 70 62 V84" stroke-width="9"/><path d="M30 54 H82 M30 66 H82" stroke-width="4.5"/></g></svg>`;
 }
 
+/** Short form for tight spots: 950, 25K, 1.2M. */
+export function shortNum(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000) return `${+(n / 1_000_000).toFixed(a >= 10_000_000 ? 0 : 1)}M`;
+  if (a >= 10_000) return `${Math.round(n / 1000)}K`;
+  return Math.round(n).toLocaleString('en-US');
+}
+/** "ħ 1.2M" as HTML. */
+export const hdShort = (n: number) => `${hdSymbol()}&nbsp;${shortNum(n)}`;
+
 /** "ħ 1,250" as HTML. */
 export const hd = (n: number) => `${hdSymbol()}&nbsp;${Math.round(n).toLocaleString('en-US')}`;
