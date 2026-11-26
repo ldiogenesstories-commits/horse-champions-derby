@@ -18,10 +18,10 @@ export interface RaceClass {
 
 export const CLASSES: RaceClass[] = [
   { name: 'Maiden', rivals: [40, 64], prize: 1, points: 1, winsToMove: 1, fee: 0 },
-  { name: 'Novice', rivals: [50, 73], prize: 1.25, points: 1.15, winsToMove: 2, fee: 25 },
-  { name: 'Graded', rivals: [60, 82], prize: 1.6, points: 1.3, winsToMove: 3, fee: 50 },
-  { name: 'Stakes', rivals: [68, 90], prize: 2.2, points: 1.5, winsToMove: 3, fee: 100 },
-  { name: 'Grand Prix', rivals: [77, 97], prize: 3, points: 1.8, winsToMove: Infinity, fee: 150 },
+  { name: 'Novice', rivals: [48, 70], prize: 1.25, points: 1.15, winsToMove: 2, fee: 25 },
+  { name: 'Graded', rivals: [54, 76], prize: 1.6, points: 1.3, winsToMove: 3, fee: 50 },
+  { name: 'Stakes', rivals: [60, 82], prize: 2.2, points: 1.5, winsToMove: 3, fee: 100 },
+  { name: 'Grand Prix', rivals: [66, 88], prize: 3, points: 1.8, winsToMove: Infinity, fee: 150 },
 ];
 /** Base career points for 1st, 2nd and 3rd (before the class multiplier). */
 export const PLACE_POINTS = [10, 6, 3];
@@ -57,7 +57,7 @@ export function recordFinish(log: CareerLog, place: number, o: { points?: number
 }
 
 /** How much stronger a big race's field is than your current class. */
-export const BIG_RACE_BUMP = 2;
+export const BIG_RACE_BUMP = 5;
 /** Big-race fields never get stronger than this, so the best horses can still win them. */
 export const BIG_RACE_CAP: [number, number] = [74, 94];
 
