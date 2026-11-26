@@ -56,10 +56,10 @@ export function careerPoints(rec: { w: number; p: number; s: number }, log: Care
 
 export function rankFor(points: number): string {
   // Tuned for the class ladder (wins high up the ladder are worth more).
-  if (points >= 300) return 'Legend';
-  if (points >= 210) return 'Champion';
-  if (points >= 130) return 'Star';
-  if (points >= 60) return 'Contender';
+  if (points >= 430) return 'Legend';
+  if (points >= 290) return 'Champion';
+  if (points >= 190) return 'Star';
+  if (points >= 100) return 'Contender';
   return 'Fan Favourite';
 }
 

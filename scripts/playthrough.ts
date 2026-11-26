@@ -20,7 +20,7 @@ import { GRADE_GAIN, type Grade } from '../src/training/grades';
 const CAREER_RACES = 25;
 const NEW_CAREER = (): CareerLog => ({ eventWins: [] as string[], crowdGifts: 0, distances: [] as string[], bestPlace: 99 });
 const careerPoints = (_r: { w: number; p: number; s: number }, log: CareerLog) => Math.round(log.ladderPts ?? 0) + log.eventWins.length * 12;
-const rankFor = (p: number) => (p >= 300 ? 'Legend' : p >= 210 ? 'Champion' : p >= 130 ? 'Star' : p >= 60 ? 'Contender' : 'Fan Favourite');
+const rankFor = (p: number) => (p >= 430 ? 'Legend' : p >= 290 ? 'Champion' : p >= 190 ? 'Star' : p >= 100 ? 'Contender' : 'Fan Favourite');
 import type { CareerLog } from '../src/career/career';
 import { recordFinish, termsFor } from '../src/career/ladder';
 import { bigRaceOn } from '../src/career/bigRaces';
@@ -75,6 +75,8 @@ export interface Result {
   career?: CareerLog;
   /** Stat total and career points at the end of each week. */
   statsByWeek: number[];
+  /** Finishing place in each race, and whether it was a big race. */
+  places: { place: number; big: boolean; week: number }[];
   pointsByWeek: number[];
 }
 
@@ -94,6 +96,7 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
   const log: string[] = [];
   const peak = PEAK_WEEK[arcOf(h)];
   const statsByWeek: number[] = [];
+  const places: { place: number; big: boolean; week: number }[] = [];
   const pointsByWeek: number[] = [];
 
   const grow = (k: StatKey, gain: number) => {
@@ -153,6 +156,7 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
       while (!race.finished && guard++ < 30 * 600) race.step();
       const p = race.player!;
       races++;
+      places.push({ place: p.place, big: !!big, week });
       if (!career.distances.includes(distKey)) career.distances.push(distKey);
       career.bestPlace = Math.min(career.bestPlace, p.place);
       const pz = Math.round(prizeFor(p.place, event) * t.prize);
@@ -194,7 +198,7 @@ export function playCareer(foal: HorseDef, strategy: Strategy, name: string, see
     name, strategy, arc: arcOf(h), topClass: ['Maiden', 'Novice', 'Graded', 'Stakes', 'Grand Prix'][career.topClass ?? 0], gpWins: career.gpWins ?? 0, bigRaces, bigWins,
     rivalRec: Object.entries(career.rivals ?? {}).map(([k, v]) => `${k} ${v.beat}-${v.lost}`).join(', '), weeks: week - 1, races, ...rec, points, rank: rankFor(points), prize,
     startTotal, bestTotal, bestWeek, finalTotal: total(), declined, firstRaceTotal, winsFirstHalf, winsSecondHalf, events, log,
-    horse: h, career, statsByWeek, pointsByWeek,
+    horse: h, career, statsByWeek, pointsByWeek, places,
   };
 }
 
