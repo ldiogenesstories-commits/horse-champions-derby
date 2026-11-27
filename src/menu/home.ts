@@ -8,6 +8,7 @@ import { portraitSVG } from '../game/portrait';
 import { hd, hdCoin } from '../game/money';
 import { LOGO } from '../game/transitions';
 import { isMuted, setMuted } from '../game/sfx';
+import { audioCredits } from '../game/audioAssets';
 import {
   buyHorseSlot, buyItem, claimFreeHorse, emptySlots, freeHorseReady, getProfile, owns, wallet,
   FREE_HORSE_RACES, MAX_SLOTS, NEW_HORSE_COST, PRIZES, type HorseSummary,
@@ -275,7 +276,8 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
       </div>
       <div class="card"><div class="card-title">Credits</div>
         <p>Horse Champions Derby: a family game by J.O., inspired by the arcade horse-racing games he loves.</p>
-        <p class="muted">Built with Claude. Music and sound effects are original and made live in the browser.</p></div></div>`;
+        <p class="muted">Built with Claude. Most music and sound effects are made live in the browser. Recorded sounds, from Freesound.org:</p>
+        <ul class="muted hm-credits">${audioCredits().map((c) => `<li>&ldquo;${esc(c.title)}&rdquo; by <a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.by)}</a> (${esc(c.license)})${c.note ? `, ${esc(c.note)}` : ''}</li>`).join('')}</ul></div></div>`;
     wireHome();
     front.querySelector('#hm-o-snd')!.addEventListener('click', () => { setMuted(!isMuted()); options(); });
     front.querySelector('#hm-o-intro')!.addEventListener('click', o.onIntro);

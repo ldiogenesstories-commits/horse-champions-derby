@@ -11,7 +11,8 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio } from './game/sfx';
+import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio, victoryFanfare } from './game/sfx';
+import { stopMusic } from './game/audioAssets';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -166,7 +167,11 @@ function show(id: Screen): void {
   }
   showNow(id);
 }
+let fanfareDue = false;
 function showNow(id: Screen): void {
+  if (id === 'results' && fanfareDue) victoryFanfare('big');
+  else if (id !== 'results') stopMusic(0.4);
+  fanfareDue = false;
   if (id === 'menu') homeMenu?.refresh();
   if (id === 'stable' || id === 'ranch') renderStable();
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
@@ -594,6 +599,7 @@ function showResults(r: Race): void {
   $('race-again').hidden = done || !!net;
   $('to-paddock').textContent = net ? 'Back to the family room' : done ? 'Retirement ceremony 🎉' : 'Back to stable';
   if (done) $('res-title').textContent += ` · Farewell race`;
+  fanfareDue = !net && !!ranBig && p.place === 1; // marquee-race win: fanfare when the screen lands
   show('results');
 }
 

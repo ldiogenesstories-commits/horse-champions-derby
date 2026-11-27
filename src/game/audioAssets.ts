@@ -20,18 +20,33 @@ export interface AudioEntry {
   minGap?: number;
   /** Loudness trim, 0-1 (default 1). */
   volume?: number;
-  /** Shown on the Options > Credits screen (required for CC-BY sources). */
-  credit?: string;
+  /** Preload this music file at startup (good for short stings that must start instantly). */
+  preload?: boolean;
+  /** Shown on the Options > Credits screen. Required for CC-BY sources; a courtesy for CC0. */
+  credit?: Credit | Credit[];
+}
+
+export interface Credit {
+  title: string;
+  by: string;
+  url: string;
+  /** e.g. 'CC BY 4.0' or 'CC0'. */
+  license: string;
+  /** What was changed, for CC-BY ('trimmed and converted'). */
+  note?: string;
 }
 
 /** Short effects. Keys match the function names in sfx.ts. */
 export const SOUNDS: Record<string, AudioEntry> = {
   // Call to the post (trumpet from "atpost.wav" by rdb, CC0), played on the pre-race screen.
-  bugle: { file: 'sfx/at-post-trumpet.mp3', volume: 0.9 },
+  bugle: { file: 'sfx/at-post-trumpet.mp3', volume: 0.9, credit: { title: 'atpost.wav', by: 'rdb', url: 'https://freesound.org/s/63753/', license: 'CC0', note: 'trumpet only' } },
   // Ranch hoofbeats: two earth/grass surface takes, scaled by gait in hoofClop().
-  hoofClop: { files: ['hoof/grass.mp3', 'hoof/ground.mp3'], volume: 0.8, minGap: 0.4 },
+  hoofClop: { files: ['hoof/grass.mp3', 'hoof/ground.mp3'], volume: 0.8, minGap: 0.4, credit: [
+    { title: 'SRS_Foley_Horse_Galloping.wav', by: 'StephenSaldanha', url: 'https://freesound.org/s/165532/', license: 'CC0' },
+    { title: 'Single Horse Galopp', by: 'D4XX', url: 'https://freesound.org/s/564628/', license: 'CC0' },
+  ] },
   // Whinnies from "Horse Sounds (SE515)" by MPooman (CC0), heard now and then in the barn and on the ranch.
-  whinny: { files: ['sfx/whinny-1.mp3', 'sfx/whinny-2.mp3', 'sfx/whinny-3.mp3', 'sfx/whinny-4.mp3', 'sfx/whinny-5.mp3', 'sfx/whinny-6.mp3'], volume: 0.7, minGap: 8 },
+  whinny: { files: ['sfx/whinny-1.mp3', 'sfx/whinny-2.mp3', 'sfx/whinny-3.mp3', 'sfx/whinny-4.mp3', 'sfx/whinny-5.mp3', 'sfx/whinny-6.mp3'], volume: 0.7, minGap: 8, credit: { title: 'Horse Sounds (SE515)', by: 'MPooman', url: 'https://freesound.org/s/681727/', license: 'CC0' } },
   // More slots (add a file in public/audio/ and uncomment or add a line):
   // gateBell:     { file: 'sfx/gate-bell.mp3' },
   // crowdRoar:    { file: 'sfx/crowd-cheer.mp3' },
@@ -46,15 +61,17 @@ export const SOUNDS: Record<string, AudioEntry> = {
 
 /** Looping or one-shot music tracks, played with playMusic(key). */
 export const MUSIC: Record<string, AudioEntry> = {
-  // menu:    { file: 'music/menu.mp3', volume: 0.6, credit: '"Title" by Artist (CC-BY 4.0)' },
+  // Victory fanfare for big races (the build and climax of the track, about 14 s).
+  fanfareBig: { file: 'music/fanfare-big.mp3', volume: 0.85, preload: true, credit: { title: 'Superhero Fanfare', by: 'humanoide9000', url: 'https://freesound.org/s/505426/', license: 'CC BY 4.0', note: 'trimmed and converted' } },
+  // fanfareRegular: { file: 'music/fanfare-regular.mp3' },  // for everyday wins (coming)
+  // menu:    { file: 'music/menu.mp3', volume: 0.6 },
   // race:    { file: 'music/race.mp3' },
-  // victory: { file: 'music/victory.mp3' },
 };
 
-/** Credit lines for everything in use, for the Credits screen. */
-export function audioCredits(): string[] {
-  const all = [...Object.values(SOUNDS), ...Object.values(MUSIC)];
-  return [...new Set(all.map((e) => e.credit).filter((c): c is string => !!c))];
+/** Every credit for audio files in use, de-duplicated, for the Credits screen. */
+export function audioCredits(): Credit[] {
+  const all = [...Object.values(SOUNDS), ...Object.values(MUSIC)].flatMap((e) => (e.credit ? [e.credit].flat() : []));
+  return all.filter((c, i) => all.findIndex((d) => d.url === c.url) === i);
 }
 
 // ---------- loading ----------
@@ -89,6 +106,7 @@ function load(file: string): Promise<AudioBuffer | null> {
 /** Fetch and decode files ahead of time (runs once audio is unlocked by the first tap). */
 export function preloadAudio(): void {
   for (const e of Object.values(SOUNDS)) for (const f of filesOf(e)) void load(f);
+  for (const e of Object.values(MUSIC)) if (e.preload) for (const f of filesOf(e)) void load(f);
 }
 
 // ---------- sound effects ----------

@@ -2,7 +2,7 @@
 // nothing to license or download. Each effect is a small recipe of oscillators,
 // filtered noise and envelopes.
 
-import { playSample, preloadAudio } from './audioAssets';
+import { playMusic, playSample, preloadAudio } from './audioAssets';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -469,4 +469,10 @@ export class SceneAmbience {
       this.next = t + 2.5 + Math.random() * 4.5;
     }
   }
+}
+
+/** Victory fanfare on the results screen: 'big' for marquee races, 'regular' for everyday wins. */
+export function victoryFanfare(kind: 'big' | 'regular'): void {
+  if (muted) return;
+  void playMusic(kind === 'big' ? 'fanfareBig' : 'fanfareRegular', { loop: false, fade: 0.05 });
 }

@@ -912,6 +912,8 @@ body[data-screen="race"] .snd-btn { top: auto; right: auto; left: 10px; bottom: 
 .hm-dots i.on { background: var(--ink); }
 .hm-how-nav { display: flex; gap: 10px; justify-content: center; }
 .hm-opts { display: grid; gap: 8px; }
+.hm-credits { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.5; }
+.hm-credits a { color: inherit; text-decoration: underline; }
 body[data-screen="menu"] #snd { display: none; }
 /* Stable extras: Home button and barn decor */
 .st-topbtns { display: flex; justify-content: flex-start; align-items: center; gap: 8px; }
