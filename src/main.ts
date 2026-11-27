@@ -11,7 +11,7 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio, victoryFanfare } from './game/sfx';
+import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio, victoryFanfare, achievementChime } from './game/sfx';
 import { stopMusic } from './game/audioAssets';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
@@ -998,6 +998,7 @@ function unlockFriend(id: FriendId): void {
   if (friends.includes(id)) return;
   friends.push(id);
   newFriends.push(id);
+  achievementChime();
   const f = FRIENDS.find((x) => x.id === id)!;
   growthLog.push({ text: `New barn friend: ${f.name} the ${f.kind} moved in!`, cls: 'big' });
   try { localStorage.setItem(BARN_KEY, JSON.stringify({ friends })); scheduleBackup(); } catch { /* memory only */ }
@@ -1391,6 +1392,7 @@ function finishDrill(d: DrillDef, r: DrillResult & { margin?: string; overWhips?
       if (!had) log.push('Two ducklings followed you home from the pool!');
     }
     if (r.grade === 'S') {
+      achievementChime();
       // Rarely, an S drops a Starfruit (raises a hidden peak).
       const t: TreatId = Math.random() < 0.125 ? 'starfruit' : Math.random() < 0.5 ? 'treatA' : 'treatB';
       treats[t]++;

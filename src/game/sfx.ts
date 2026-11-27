@@ -476,3 +476,11 @@ export function victoryFanfare(kind: 'big' | 'regular'): void {
   if (muted) return;
   void playMusic(kind === 'big' ? 'fanfareBig' : 'fanfareRegular', { loop: false, fade: 0.05 });
 }
+
+/** A short happy jingle: an S-rank drill, or a new friend moving into the barn. */
+export function achievementChime(): void {
+  if (playSample('levelComplete')) return;
+  if (!ready()) return;
+  const t = now();
+  [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(t + i * 0.09, f, 0.25, 'square', 0.05, { lowpass: 2400 }));
+}
