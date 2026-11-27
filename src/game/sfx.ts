@@ -484,3 +484,12 @@ export function achievementChime(): void {
   const t = now();
   [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(t + i * 0.09, f, 0.25, 'square', 0.05, { lowpass: 2400 }));
 }
+
+/** A coin clink for Horse Dollars changing hands. */
+export function coinSound(): void {
+  if (playSample('coin')) return;
+  if (!ready()) return;
+  const t = now();
+  tone(t, 1318.5, 0.07, 'square', 0.04, { lowpass: 3000 });
+  tone(t + 0.07, 1975.5, 0.22, 'square', 0.04, { lowpass: 3000 });
+}

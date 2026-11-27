@@ -7,7 +7,7 @@ import { puppetFrames } from '../game/puppet';
 import { portraitSVG } from '../game/portrait';
 import { hd, hdCoin } from '../game/money';
 import { LOGO } from '../game/transitions';
-import { isMuted, setMuted } from '../game/sfx';
+import { coinSound, isMuted, setMuted } from '../game/sfx';
 import { audioCredits } from '../game/audioAssets';
 import {
   buyHorseSlot, buyItem, claimFreeHorse, emptySlots, freeHorseReady, getProfile, owns, wallet,
@@ -191,7 +191,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
       const b = e.currentTarget as HTMLButtonElement;
       if (confirmId !== 'stall') { confirmId = 'stall'; b.innerHTML = `Tap again: ${hd(NEW_HORSE_COST)}`; return; }
       confirmId = '';
-      buyHorseSlot();
+      if (buyHorseSlot()) coinSound();
       myStable();
     });
   }
@@ -226,7 +226,7 @@ export function runHome(root: HTMLElement, o: HomeOpts): { refresh: () => void }
       const item = SHOP.find((x) => x.id === id)!;
       if (confirmId !== id) { confirmId = id; shop(); return; }
       confirmId = '';
-      buyItem(id, item.price);
+      if (buyItem(id, item.price)) coinSound();
       const y = front.scrollTop;
       shop();
       front.scrollTop = y;

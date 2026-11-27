@@ -49,6 +49,8 @@ export const SOUNDS: Record<string, AudioEntry> = {
   whinny: { files: ['sfx/whinny-1.mp3', 'sfx/whinny-2.mp3', 'sfx/whinny-3.mp3', 'sfx/whinny-4.mp3', 'sfx/whinny-5.mp3', 'sfx/whinny-6.mp3'], volume: 0.7, minGap: 8, credit: { title: 'Horse Sounds (SE515)', by: 'MPooman', url: 'https://freesound.org/s/681727/', license: 'CC0' } },
   // Little 8-bit jingle for an S-rank drill and for a new barn friend moving in.
   levelComplete: { file: 'sfx/level-complete.mp3', volume: 0.8, minGap: 2, credit: { title: '8-Bit Level Complete', by: 'Qvantor', url: 'https://freesound.org/s/878321/', license: 'CC0' } },
+  // Horse Dollar coin: shop buys, stall purchases, Premier Partner fee and prize money.
+  coin: { file: 'sfx/coin.mp3', volume: 0.8, minGap: 0.15, credit: { title: 'Coin_Misc_06', by: 'Valenspire', url: 'https://freesound.org/s/699535/', license: 'CC0' } },
   // More slots (add a file in public/audio/ and uncomment or add a line):
   // gateBell:     { file: 'sfx/gate-bell.mp3' },
   // crowdRoar:    { file: 'sfx/crowd-cheer.mp3' },
