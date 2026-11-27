@@ -455,3 +455,22 @@ export class SceneAmbience {
     }
   }
 }
+
+/** Hooves in the pond: a splashy slosh (big = plunging in). */
+export function splash(big = false): void {
+  if (!ready()) return;
+  const t = now();
+  noise(t, big ? 0.55 : 0.22, 'bandpass', big ? 900 : 1400, big ? 2600 : 2200, 0.9, big ? 0.22 : 0.08, 0.005);
+  noise(t, big ? 0.35 : 0.12, 'lowpass', 600, 250, 0.7, big ? 0.16 : 0.06, 0.004);
+  const drops = big ? 6 : 2;
+  for (let i = 0; i < drops; i++) tone(t + 0.04 + Math.random() * (big ? 0.35 : 0.12), 900 + Math.random() * 900, 0.05, 'sine', 0.035, { slideTo: 1800 + Math.random() * 900 });
+}
+
+/** The wooden swing seat knocking against the tree trunk. */
+export function knock(hard = 0.6): void {
+  if (!ready()) return;
+  const t = now();
+  tone(t, 210 + Math.random() * 30, 0.12, 'triangle', 0.22 * hard, { slideTo: 150 });
+  tone(t, 520, 0.05, 'square', 0.04 * hard, { lowpass: 1600 });
+  noise(t + 0.03, 0.6, 'highpass', 3000, 4500, 0.5, 0.04 * hard, 0.05); // leaves rustle
+}
