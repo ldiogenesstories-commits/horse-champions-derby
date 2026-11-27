@@ -11,7 +11,8 @@ import { DISTANCES, type DistanceKey } from './sim/track';
 import { DEFAULT_TUNING, type ClosePlan, type Entrant, type HorseDef, type LanePref, type RacePlan, type StartPlan, type TrackPlan, type Tuning } from './sim/types';
 import { RaceScene, type StageLayout } from './game/RaceScene';
 import { portraitSVG } from './game/portrait';
-import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio } from './game/sfx';
+import { RaceAmbience, SceneAmbience, bugle, gateBell, hoofClop, isMuted, setMuted, unlockAudio, victoryFanfare, achievementChime, coinSound } from './game/sfx';
+import { stopMusic } from './game/audioAssets';
 import { playFinishSplash, playTransition, transitionDone, type TransitionKind } from './game/transitions';
 import { runGateDrill, type DrillResult } from './training/gateDrill';
 import { runStretchDuel } from './training/stretchDuel';
@@ -166,7 +167,14 @@ function show(id: Screen): void {
   }
   showNow(id);
 }
+let fanfareDue = false;
+let prizeDue = false;
 function showNow(id: Screen): void {
+  if (id === 'results' && fanfareDue) victoryFanfare('big');
+  else if (id !== 'results') stopMusic(0.4);
+  if (id === 'results' && prizeDue) coinSound();
+  fanfareDue = false;
+  prizeDue = false;
   if (id === 'menu') homeMenu?.refresh();
   if (id === 'stable' || id === 'ranch') renderStable();
   for (const s of SCREENS) $(s).classList.toggle('active', s === id);
@@ -594,6 +602,8 @@ function showResults(r: Race): void {
   $('race-again').hidden = done || !!net;
   $('to-paddock').textContent = net ? 'Back to the family room' : done ? 'Retirement ceremony 🎉' : 'Back to stable';
   if (done) $('res-title').textContent += ` · Farewell race`;
+  prizeDue = prize > 0; // coin clink when the results land
+  fanfareDue = !net && !!ranBig && p.place === 1; // marquee-race win: fanfare when the screen lands
   show('results');
 }
 
@@ -898,7 +908,7 @@ function openBreeding(preselect?: string): void {
         }
       }
       for (const c of cards.filter((x) => !x.guest)) c.horse.foals = (c.horse.foals ?? 0) + 1;
-      if (used.premier) spend(PREMIER_COST);
+      if (used.premier && spend(PREMIER_COST)) coinSound();
       saveHall();
       return newHorse(foal);
     },
@@ -992,6 +1002,7 @@ function unlockFriend(id: FriendId): void {
   if (friends.includes(id)) return;
   friends.push(id);
   newFriends.push(id);
+  achievementChime();
   const f = FRIENDS.find((x) => x.id === id)!;
   growthLog.push({ text: `New barn friend: ${f.name} the ${f.kind} moved in!`, cls: 'big' });
   try { localStorage.setItem(BARN_KEY, JSON.stringify({ friends })); scheduleBackup(); } catch { /* memory only */ }
@@ -1385,6 +1396,7 @@ function finishDrill(d: DrillDef, r: DrillResult & { margin?: string; overWhips?
       if (!had) log.push('Two ducklings followed you home from the pool!');
     }
     if (r.grade === 'S') {
+      achievementChime();
       // Rarely, an S drops a Starfruit (raises a hidden peak).
       const t: TreatId = Math.random() < 0.125 ? 'starfruit' : Math.random() < 0.5 ? 'treatA' : 'treatB';
       treats[t]++;

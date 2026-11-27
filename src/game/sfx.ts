@@ -2,6 +2,8 @@
 // nothing to license or download. Each effect is a small recipe of oscillators,
 // filtered noise and envelopes.
 
+import { playMusic, playSample, preloadAudio } from './audioAssets';
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
@@ -19,6 +21,7 @@ export function unlockAudio(): void {
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    preloadAudio(); // fetch any real sound files now that audio is unlocked
   }
   if (ctx.state === 'suspended') void ctx.resume();
 }
@@ -98,6 +101,7 @@ const now = () => ctx!.currentTime + 0.01;
 
 /** Heavy velvet sweeping across: a filtered-noise whoosh with a fabric rustle. */
 export function curtainSwish(opening = false): void {
+  if (playSample('curtainSwish')) return;
   if (!ready()) return;
   const t = now();
   noise(t, 0.65, 'bandpass', opening ? 1800 : 500, opening ? 500 : 1800, 0.9, 0.35, 0.12);
@@ -107,6 +111,7 @@ export function curtainSwish(opening = false): void {
 
 /** A little music-box chime when the logo appears. */
 export function logoChime(): void {
+  if (playSample('logoChime')) return;
   if (!ready()) return;
   const t = now();
   [1046.5, 1318.5, 1568, 2093].forEach((f, i) => {
@@ -117,6 +122,7 @@ export function logoChime(): void {
 
 /** Grass and flowers popping up, with a couple of birds. */
 export function naturePops(): void {
+  if (playSample('naturePops')) return;
   if (!ready()) return;
   const t = now();
   for (let i = 0; i < 14; i++) {
@@ -132,6 +138,7 @@ export function naturePops(): void {
 
 /** An original bugle fanfare on the natural notes of a bugle (C-G-C-E-G). */
 export function bugle(): void {
+  if (playSample('bugle')) return;
   if (!ready()) return;
   const t = now();
   const G4 = 392, C5 = 523.3, E5 = 659.3, G5 = 784;
@@ -148,6 +155,7 @@ export function bugle(): void {
 
 /** The starting bell as the gates fly open. */
 export function gateBell(): void {
+  if (playSample('gateBell')) return;
   if (!ready()) return;
   const t = now();
   for (let i = 0; i < 6; i++) {
@@ -159,6 +167,7 @@ export function gateBell(): void {
 
 /** The comic "POW" as the finish panel slams in. */
 export function finishHit(): void {
+  if (playSample('finishHit')) return;
   if (!ready()) return;
   const t = now();
   tone(t, 160, 0.3, 'sine', 0.6, { slideTo: 40 });
@@ -167,6 +176,7 @@ export function finishHit(): void {
 
 /** The crowd: a roar that swells and fades; bigger, with whistles and a fanfare, for a win. */
 export function crowdRoar(win = false, top3 = false): void {
+  if (playSample(win ? 'crowdRoarWin' : 'crowdRoar')) return;
   if (!ready()) return;
   const t = now();
   const peak = win ? 0.32 : top3 ? 0.22 : 0.12;
@@ -191,6 +201,7 @@ export function crowdRoar(win = false, top3 = false): void {
 
 /** A quick camera-cut whoosh between broadcast shots. */
 export function cameraCut(): void {
+  if (playSample('cameraCut')) return;
   if (!ready()) return;
   noise(now(), 0.18, 'bandpass', 2500, 900, 1.2, 0.07, 0.01);
 }
@@ -314,6 +325,7 @@ export class RaceAmbience {
 
 /** Little voices for ranch critters (tap, play, scatter). */
 export function critterSound(kind: string): void {
+  if (playSample('critter:' + kind)) return;
   if (!ready()) return;
   const t = now();
   switch (kind) {
@@ -332,9 +344,10 @@ export function critterSound(kind: string): void {
 
 /** A soft clop on the ranch grass, by gait. */
 export function hoofClop(gait: string): void {
+  const lvl = gait === 'canter' ? 1 : gait === 'trot' ? 0.75 : 0.5;
+  if (playSample('hoofClop', lvl)) return;
   if (!ready()) return;
   const t = now();
-  const lvl = gait === 'canter' ? 1 : gait === 'trot' ? 0.75 : 0.5;
   tone(t, 180 + Math.random() * 40, 0.06, 'sine', 0.08 * lvl, { slideTo: 90 });
   noise(t, 0.05, 'bandpass', 900, 600, 1.2, 0.05 * lvl, 0.002);
 }
@@ -440,6 +453,7 @@ export class SceneAmbience {
         this.next = t + 1.2 + Math.random() * 2;
       } else {
         birdsong(t + 0.05, this.tod < 0.35 ? 0.05 : 0.035);
+        if (Math.random() < 0.08) playSample('whinny', 0.6); // a far-off neigh
         if (Math.random() < 0.35) birdsong(t + 0.6 + Math.random() * 0.6, 0.025); // an answer
         this.next = t + (this.tod < 0.35 ? 2 : 3.5) + Math.random() * 4;
       }
@@ -449,9 +463,33 @@ export class SceneAmbience {
       if (r < 0.3) strawRustle(at);
       else if (r < 0.5) creak(at);
       else if (r < 0.7) snort(at);
+      else if (r < 0.76 && playSample('whinny', 0.8)) { /* a neigh from a neighbouring stall */ }
       else if (this.friends.length) critterSound(this.friends[Math.floor(Math.random() * this.friends.length)]);
       else strawRustle(at);
       this.next = t + 2.5 + Math.random() * 4.5;
     }
   }
+}
+
+/** Victory fanfare on the results screen: 'big' for marquee races, 'regular' for everyday wins. */
+export function victoryFanfare(kind: 'big' | 'regular'): void {
+  if (muted) return;
+  void playMusic(kind === 'big' ? 'fanfareBig' : 'fanfareRegular', { loop: false, fade: 0.05 });
+}
+
+/** A short happy jingle: an S-rank drill, or a new friend moving into the barn. */
+export function achievementChime(): void {
+  if (playSample('levelComplete')) return;
+  if (!ready()) return;
+  const t = now();
+  [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone(t + i * 0.09, f, 0.25, 'square', 0.05, { lowpass: 2400 }));
+}
+
+/** A coin clink for Horse Dollars changing hands. */
+export function coinSound(): void {
+  if (playSample('coin')) return;
+  if (!ready()) return;
+  const t = now();
+  tone(t, 1318.5, 0.07, 'square', 0.04, { lowpass: 3000 });
+  tone(t + 0.07, 1975.5, 0.22, 'square', 0.04, { lowpass: 3000 });
 }
