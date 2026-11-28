@@ -10,6 +10,7 @@
     "sim:test": "tsx scripts/balance.ts",
     "narration:test": "tsx scripts/narration.ts",
     "breeding:test": "tsx scripts/breeding.ts",
+    "arc:test": "tsx scripts/arcTells.ts",
     "playthrough": "tsx scripts/playthrough.ts"
   },
   "dependencies": {

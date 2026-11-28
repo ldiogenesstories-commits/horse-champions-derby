@@ -1011,3 +1011,7 @@ body[data-screen="menu"] #snd { display: none; }
 .gc-i { grid-row: auto; }
 .grow-card b { font-size: 14px; line-height: 1.1; }
 .grow-card small { font-size: 11px; line-height: 1.15; }
+.st-dayc { display: grid; justify-items: end; gap: 5px; }
+.st-form { font: 800 12px var(--display, system-ui); padding: 3px 10px; border-radius: 999px; border: 2px solid var(--ink); background: #DFF3D6; color: var(--ink); white-space: nowrap; }
+.st-form[data-form="peak"] { background: #FFE58A; }
+.st-form[data-form="past"] { background: #F2C9C0; }

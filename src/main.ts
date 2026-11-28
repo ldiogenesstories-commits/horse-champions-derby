@@ -53,7 +53,7 @@ import { canEnterUp, currentClass, ladderLine, recordFinish, termsFor, CLASSES, 
 import { bigRaceOn, nextBigRace, type BigRace } from './career/bigRaces';
 import { addRivals, recordRivals, rivalsFor, rivalOf } from './career/rivals';
 import { owns } from './profile/profile';
-import { CAREER_WEEKS, DECLINE_EVERY, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
+import { CAREER_WEEKS, DECLINE_EVERY, FORM_LABEL, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf, formOf, trainerTell } from './sim/arc';
 import { qrSVG } from './career/career';
 import { runGrowingUp } from './career/growingUp';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
@@ -585,6 +585,7 @@ function showResults(r: Race): void {
   rustWeeks = 0;
   rustApplied = 0;
   weekPassed();
+  weeklyTell();
   actionsLeft = ACTIONS_PER_DAY;
   // Gifts: fans cheer up a last-place horse; event winners earn a prize meal.
   pendingGift = null;
@@ -843,6 +844,12 @@ function weekPassed(): boolean {
   declined++;
   if (declined === 1) growthLog.push({ text: PRIME_MSG(), cls: '' });
   return declined === 1;
+}
+/** The trainer's read on the new week (clues about how long the form will last), logged and returned. */
+function weeklyTell(): string | null {
+  const t = trainerTell(arcOf(player), day, player.name);
+  if (t) growthLog.push({ text: t, cls: 'big' });
+  return t;
 }
 const PRIME_MSG = () => `${player.name} is a little past their prime. Stats will slowly slip, and training gains are smaller now.`;
 
@@ -1190,6 +1197,11 @@ function renderStable(): void {
   void stableHorse(player, look, groomToday().brush);
   const wl = weeksLeft();
   $('st-day').textContent = `Week ${Math.min(day, CAREER_WEEKS)} of ${CAREER_WEEKS}`;
+  const form = formOf(arcOf(player), day);
+  const formEl = $('st-form');
+  formEl.textContent = FORM_LABEL[form];
+  formEl.dataset.form = form;
+  formEl.hidden = activeRetired();
   const tight = wl <= racesLeft();
   $('st-weeks').textContent = tight
     ? `Only ${wl} week${wl === 1 ? '' : 's'} left for ${racesLeft()} race${racesLeft() === 1 ? '' : 's'}: race every week!`
@@ -1527,9 +1539,11 @@ function trainWeek(): void {
   const hit = Math.min(step, 15 - rustApplied);
   if (hit > 0) { confidence = Math.max(0, confidence - hit); rustApplied += hit; }
   const turned = weekPassed();
+  const tell = weeklyTell();
   save();
   if (careerOver()) { stableMsg(`${player.name}'s ${CAREER_WEEKS} weeks are up. Time to retire!`); retire(); return; }
   if (turned) { stableMsg(`${PRIME_MSG()}${hit > 0 ? ` Also a bit rusty (Confidence −${hit}).` : ''}`, true); renderStable(); return; }
+  if (tell) { stableMsg(`${tell}${hit > 0 ? ` (A bit rusty: Confidence −${hit}.)` : ''}`); renderStable(); return; }
   stableMsg(hit > 0 ? `A week of training. ${player.name} is getting rusty (Confidence −${hit}). A race will shake it off.` : `A week of training. 3 fresh actions!`, hit > 0);
   renderStable();
 }
