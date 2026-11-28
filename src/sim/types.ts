@@ -47,6 +47,8 @@ export interface HorseDef {
   sire?: string;
   dam?: string;
   generation?: number;
+  /** Growing up: 'newborn' → 'foal' → 'yearling' → 'racer'. Missing means a grown racer. */
+  stage?: 'newborn' | 'foal' | 'yearling' | 'racer';
   /** A 'shining star' foal's standout stat. */
   spark?: 'speed' | 'stamina' | 'accel' | 'guts' | 'gate' | 'agility';
   sparks?: ('speed' | 'stamina' | 'accel' | 'guts' | 'gate' | 'agility')[];

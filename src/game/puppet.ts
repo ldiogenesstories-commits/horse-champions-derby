@@ -355,8 +355,10 @@ async function partsFor(def: HorseDef, j: Jockey | null, order: Part[], look: Lo
 }
 
 /** World matrix of every part for one pose. */
-function poseWorld(rig: Rig, ph: number, mode: PuppetMode, k: number, root: Vec): Map<string, M> {
-  const po = rig.pose(ph, mode);
+function poseWorld(rig: Rig, ph: number, mode: PuppetMode, k: number, root: Vec, extra?: Pose): Map<string, M> {
+  let po = rig.pose(ph, mode);
+  // Extra adjustments replace a joint's value, except body height, which adds on.
+  if (extra) po = { ...po, ...extra, 'hips.y': (po['hips.y'] ?? 0) + (extra['hips.y'] ?? 0) };
   const get = (key: string, d = 0) => po[key] ?? d;
   const world = new Map<string, M>();
   for (const p of rig.parts) {
@@ -367,7 +369,7 @@ function poseWorld(rig: Rig, ph: number, mode: PuppetMode, k: number, root: Vec)
       const at = p.at ?? [0, 0];
       m = mul(world.get(p.parent)!, T(at[0] + get(`${p.id}.x`), at[1] + get(`${p.id}.y`)));
       m = mul(m, R((p.rot ?? 0) + get(p.id)));
-      const s = p.s ?? 1;
+      const s = (p.s ?? 1) * get(`${p.id}.s`, 1);
       m = mul(m, S(p.flip ? -s : s, s * (p.sy ?? 1) * get(`${p.id}.sy`, 1)));
       if (p.pivot) m = mul(m, T(-p.pivot[0], -p.pivot[1]));
     }
@@ -376,13 +378,13 @@ function poseWorld(rig: Rig, ph: number, mode: PuppetMode, k: number, root: Vec)
   return world;
 }
 
-function bake(rig: Rig, parts: Map<string, Src>, order: Part[], frames: number, W: number, H: number, mode: PuppetMode, base: number, look: Look = DEFAULT_LOOK, j: Jockey | null = null): HTMLCanvasElement[] {
+function bake(rig: Rig, parts: Map<string, Src>, order: Part[], frames: number, W: number, H: number, mode: PuppetMode, base: number, look: Look = DEFAULT_LOOK, j: Jockey | null = null, extra?: Pose): HTMLCanvasElement[] {
   const { k, root } = rig.fit(W, H, base);
   return Array.from({ length: frames }, (_, f) => {
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d')!;
-    const world = poseWorld(rig, f / frames, mode, k, root);
+    const world = poseWorld(rig, f / frames, mode, k, root, extra);
     for (const p of order) {
       if (p.show && !p.show(look, j)) continue;
       const m = world.get(p.id)!;
@@ -407,7 +409,27 @@ export interface PuppetOpts {
   base?: number;
   /** Grooming look (mane, tail, bows, extras); defaults to the horse's own. */
   look?: Look;
+  /** How grown up (0 = newborn foal, 1 = full grown): foals get a bigger head and shorter legs. Side-on only. */
+  grow?: number;
 }
+
+/** Foal proportions for a growth fraction g (0..1): big head, short chubby legs. */
+function growPose(g: number, mode: PuppetMode): Pose {
+  const f = 1 - Math.max(0, Math.min(1, g));
+  if (f <= 0) return {};
+  const head = { 'head.s': 1 + 0.45 * f, 'neck.s': 1 - 0.12 * f };
+  // Lying or grazing keeps the grown-up pose; only the head is bigger.
+  if (mode === 'lie' || mode === 'graze') return head;
+  const leg = 1 - LEG_CUT * f;
+  return {
+    ...head,
+    'hips.y': HIP_DROP * f,
+    'frontU.s': leg, 'farFrontU.s': leg, 'hindU.s': leg, 'farHindU.s': leg,
+  };
+}
+/** How much shorter a newborn's legs are, and how far its body drops to keep the hooves on the ground. */
+const LEG_CUT = 0.35;
+const HIP_DROP = 210;
 
 /**
  * Bake `frames` side-on poses for one horse (and rider, if given) onto canvases sized
@@ -416,7 +438,7 @@ export interface PuppetOpts {
 export async function puppetFrames(def: HorseDef, j: Jockey | null, frames: number, width: number, o: PuppetOpts = {}): Promise<HTMLCanvasElement[]> {
   const order = orderFor(SIDE, !!j);
   const look = { ...DEFAULT_LOOK, ...(o.look ?? def.look ?? {}) };
-  return bake(RIGS.side, await partsFor(def, j, order, look), order, frames, width, Math.round(width * 290 / 320), o.mode ?? 'gallop', o.base ?? 0.93, look, j);
+  return bake(RIGS.side, await partsFor(def, j, order, look), order, frames, width, Math.round(width * 290 / 320), o.mode ?? 'gallop', o.base ?? 0.93, look, j, o.grow !== undefined && o.grow < 1 ? growPose(o.grow, o.mode ?? 'gallop') : undefined);
 }
 
 /** Head-on poses, width × height, hooves on 96% of the height by default. */

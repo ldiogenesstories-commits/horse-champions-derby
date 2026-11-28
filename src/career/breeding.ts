@@ -174,6 +174,7 @@ export function breedFoal(a: HorseDef, b: HorseDef, name: string, seed: number, 
     pedigree: pedigreeOf(sireH, sireRank, damH, damRank),
     line,
     generation: Math.max(a.generation ?? 1, b.generation ?? 1) + 1,
+    stage: 'newborn',
     potential,
     sparks,
   };
