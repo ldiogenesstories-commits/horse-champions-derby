@@ -45,3 +45,44 @@ export function arcHint(a: HorseDef, b: HorseDef): string {
   if (v === 1.5) return 'Steady to late';
   return 'Late';
 }
+
+/** Weeks before its peak that a horse starts to look close to its best. */
+export const NEAR_PEAK_WEEKS = 6;
+/** The week the trainer gives a first read on how a horse is growing up. */
+export const FIRST_READ_WEEK = 10;
+
+export type Form = 'rising' | 'peak' | 'past';
+/** Where a horse is on its arc this week (shown as a badge in the stable). */
+export function formOf(arc: Arc, day: number): Form {
+  const peak = PEAK_WEEK[arc];
+  return day > peak ? 'past' : day > peak - NEAR_PEAK_WEEKS ? 'peak' : 'rising';
+}
+export const FORM_LABEL: Record<Form, string> = { rising: '📈 Still improving', peak: '⭐ Near its best', past: '📉 Past its prime' };
+
+/**
+ * The trainer's read for a week, if there is one. Clues, not labels: they never name the arc, but
+ * a watchful owner can tell early, steady and late bloomers apart, and plan races around them.
+ * `day` is the week that has just begun.
+ */
+export function trainerTell(arc: Arc, day: number, name: string): string | null {
+  const peak = PEAK_WEEK[arc];
+  if (day === FIRST_READ_WEEK) {
+    return {
+      early: `Trainer: ${name} is quick and eager, growing up fast. Horses like this tend to peak early.`,
+      steady: `Trainer: ${name} is calm and growing at an even pace. A horse like this holds its form a good while.`,
+      late: `Trainer: ${name} is still a gangly kid, slow to fill out. It may take a while to reach its best.`,
+    }[arc];
+  }
+  if (day === peak - NEAR_PEAK_WEEKS + 1) {
+    return {
+      early: `Trainer: ${name} looks nearly grown and as sharp as it will get. The best weeks are close, so make them count.`,
+      steady: `Trainer: ${name} has settled into a strong, even stride. A good run of form is coming.`,
+      late: `Trainer: ${name} is only now growing into its frame. The best is still ahead.`,
+    }[arc];
+  }
+  if (day === peak) return `Trainer: this is ${name}'s peak week. It doesn't get better than this.`;
+  // Late and steady horses keep going while others fade: a tell for the ones who are not done yet.
+  if (arc !== 'early' && day === PEAK_WEEK.early + 1) return `Trainer: ${name} shows no sign of slowing down yet. Still going strong.`;
+  if (arc === 'late' && day === PEAK_WEEK.steady + 1) return `Trainer: ${name} has plenty left in the tank. The late bloomer's time is now.`;
+  return null;
+}
