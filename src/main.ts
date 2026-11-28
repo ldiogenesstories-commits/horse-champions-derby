@@ -55,6 +55,7 @@ import { addRivals, recordRivals, rivalsFor, rivalOf } from './career/rivals';
 import { owns } from './profile/profile';
 import { CAREER_WEEKS, DECLINE_EVERY, MAX_DECLINE, PAST_PEAK_GAIN, PEAK_WEEK, arcOf } from './sim/arc';
 import { qrSVG } from './career/career';
+import { runGrowingUp } from './career/growingUp';
 import { GRADE_GAIN, TREATS, type TreatId } from './training/grades';
 
 // ---------- State ----------
@@ -184,6 +185,26 @@ function showNow(id: Screen): void {
   sceneAmb.set(id === 'ranch' ? 'ranch' : id === 'stable' ? 'barn' : null);
   if (id === 'ranch') enterRanch(); else ranch?.stop();
   window.scrollTo(0, 0);
+  if (id === 'stable' || id === 'ranch') maybeGrowUp();
+}
+
+/** A newly bred foal grows up (birth, care, gate school, ready) before its career starts. */
+let growing = false;
+function maybeGrowUp(): void {
+  if (growing || !player.stage || player.stage === 'racer' || activeRetired()) return;
+  growing = true;
+  void runGrowingUp({
+    horse: player,
+    look,
+    jockey,
+    onChange: (p) => {
+      if (p.stage) player.stage = p.stage;
+      if (p.need) player.need = p.need;
+      if (p.gateBonus) player.stats.gate = Math.min(potentialOf(player, 'gate'), player.stats.gate + p.gateBonus);
+      save();
+    },
+    onDone: () => { growing = false; renderStable(); },
+  });
 }
 
 // ---------- Paddock ----------
@@ -2086,6 +2107,8 @@ else show('menu');
   if (card) { renderHall(); ($('card-code') as HTMLInputElement).value = card; void findCard(card); }
   else if (rest) { openBarn(); ($('backup-box') as HTMLDetailsElement).open = true; renderBackup(); void findBackup(rest); setTimeout(() => $('backup-box').scrollIntoView({ block: 'start' }), 100); }
 }
+// Dev only: ?growtest replays the foal growing-up scenes for the current horse.
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('growtest')) { player.stage = 'newborn'; show('stable'); }
 // Opening sequence on every launch (Skip button), then the home menu.
 if (!nextScreen && shouldPlayIntro()) {
   sceneAmb.set(null); // keep the barn ambience out of the score
